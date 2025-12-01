@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/theme.dart';
-import '../providers/theme_provider.dart';
 import '../providers/location_provider.dart';
 import '../providers/analysis_provider.dart';
+import '../widgets/widgets.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,7 +16,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    // 초기 위치 로드
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final locationProvider = context.read<LocationProvider>();
       if (locationProvider.currentLocation == null) {
@@ -28,192 +27,84 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final themeProvider = context.watch<ThemeProvider>();
-    final locationProvider = context.watch<LocationProvider>();
     final analysisProvider = context.watch<AnalysisProvider>();
 
     return Scaffold(
-      body: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            // 헤더
-            SliverToBoxAdapter(
-              child: _buildHeader(theme, themeProvider),
-            ),
+      body: WeatherBackground(
+        condition: _getWeatherCondition(analysisProvider.currentRiskScore),
+        child: SafeArea(
+          child: CustomScrollView(
+            slivers: [
+              // Glassmorphism 헤더
+              const SliverToBoxAdapter(
+                child: AppHeader(),
+              ),
 
-            // 위치 섹션
-            SliverToBoxAdapter(
-              child: _buildLocationSection(theme, locationProvider),
-            ),
-
-            // 현재 상태 카드
-            SliverToBoxAdapter(
-              child: _buildStatusCard(theme, analysisProvider),
-            ),
-
-            // 빠른 분석 버튼
-            SliverToBoxAdapter(
-              child: _buildQuickActions(theme),
-            ),
-
-            // 최근 분석 결과
-            SliverToBoxAdapter(
-              child: _buildRecentAnalysis(theme, analysisProvider),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(ThemeData theme, ThemeProvider themeProvider) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Dewbye',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
+              // 위치 입력 위젯
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: LocationInputWidget(
+                    onTap: () => Navigator.pushNamed(context, '/location'),
+                  ),
                 ),
               ),
-              Text(
-                '결로 위험 예측 분석',
-                style: theme.textTheme.bodyMedium,
+
+              // 결로 위험도 카드 (애니메이션 포함)
+              SliverToBoxAdapter(
+                child: _buildStatusCard(theme, analysisProvider),
+              ),
+
+              // 빠른 액션 버튼
+              SliverToBoxAdapter(
+                child: _buildQuickActions(theme),
+              ),
+
+              // 최근 분석 결과
+              SliverToBoxAdapter(
+                child: _buildRecentAnalysis(theme, analysisProvider),
               ),
             ],
           ),
-          IconButton(
-            onPressed: () => themeProvider.toggleTheme(),
-            icon: Icon(
-              themeProvider.isDarkMode ? Icons.light_mode : Icons.dark_mode,
-              size: 28,
-            ),
-            tooltip: themeProvider.isDarkMode ? '라이트 모드' : '다크 모드',
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildLocationSection(ThemeData theme, LocationProvider locationProvider) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Card(
-        child: InkWell(
-          onTap: () {
-            Navigator.pushNamed(context, '/location');
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    Icons.location_on,
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        locationProvider.isLoading
-                            ? '위치 확인 중...'
-                            : locationProvider.currentLocation?.toString() ?? '위치를 선택하세요',
-                        style: theme.textTheme.titleMedium,
-                      ),
-                      if (locationProvider.currentLocation != null)
-                        Text(
-                          '${locationProvider.currentLocation!.latitude.toStringAsFixed(4)}, ${locationProvider.currentLocation!.longitude.toStringAsFixed(4)}',
-                          style: theme.textTheme.bodyMedium,
-                        ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.chevron_right,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  WeatherCondition _getWeatherCondition(double riskScore) {
+    if (riskScore >= 75) return WeatherCondition.humid;
+    if (riskScore >= 50) return WeatherCondition.foggy;
+    if (riskScore >= 25) return WeatherCondition.cloudy;
+    return WeatherCondition.clear;
   }
 
   Widget _buildStatusCard(ThemeData theme, AnalysisProvider analysisProvider) {
     final riskScore = analysisProvider.currentRiskScore;
-    final riskColor = AppTheme.getRiskColor(riskScore);
-    final riskLabel = AppTheme.getRiskLabel(riskScore);
 
     return Padding(
       padding: const EdgeInsets.all(16),
-      child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
+      child: GlassmorphismContainer(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            Text(
+              '현재 결로 위험도',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: 16),
+            CondensationAnimation(
+              riskScore: riskScore,
+              size: 180,
+              showLabel: true,
+            ),
+            const SizedBox(height: 16),
+            if (analysisProvider.results.isNotEmpty)
               Text(
-                '현재 결로 위험도',
-                style: theme.textTheme.titleMedium,
+                analysisProvider.results.first.recommendation,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium,
               ),
-              const SizedBox(height: 16),
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  SizedBox(
-                    width: 150,
-                    height: 150,
-                    child: CircularProgressIndicator(
-                      value: riskScore / 100,
-                      strokeWidth: 12,
-                      backgroundColor: theme.colorScheme.surface,
-                      valueColor: AlwaysStoppedAnimation<Color>(riskColor),
-                    ),
-                  ),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '${riskScore.toStringAsFixed(0)}%',
-                        style: theme.textTheme.headlineLarge?.copyWith(
-                          color: riskColor,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        riskLabel,
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          color: riskColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              if (analysisProvider.results.isNotEmpty)
-                Text(
-                  analysisProvider.results.first.recommendation,
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodyMedium,
-                ),
-            ],
-          ),
+          ],
         ),
       ),
     );
@@ -225,7 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Row(
         children: [
           Expanded(
-            child: _ActionCard(
+            child: _GlassActionCard(
               icon: Icons.analytics,
               label: '상세 분석',
               onTap: () => Navigator.pushNamed(context, '/analysis'),
@@ -233,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _ActionCard(
+            child: _GlassActionCard(
               icon: Icons.show_chart,
               label: '그래프',
               onTap: () => Navigator.pushNamed(context, '/graph'),
@@ -241,7 +132,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: _ActionCard(
+            child: _GlassActionCard(
               icon: Icons.settings,
               label: '설정',
               onTap: () => Navigator.pushNamed(context, '/settings'),
@@ -256,34 +147,33 @@ class _HomeScreenState extends State<HomeScreen> {
     if (analysisProvider.results.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(16),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.analytics_outlined,
-                  size: 48,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  '아직 분석 결과가 없습니다',
-                  style: theme.textTheme.titleMedium,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '상세 분석을 실행하여 결로 위험을 확인하세요',
-                  style: theme.textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => Navigator.pushNamed(context, '/analysis'),
-                  child: const Text('분석 시작'),
-                ),
-              ],
-            ),
+        child: GlassmorphismContainer(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            children: [
+              Icon(
+                Icons.analytics_outlined,
+                size: 48,
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '아직 분석 결과가 없습니다',
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '상세 분석을 실행하여 결로 위험을 확인하세요',
+                style: theme.textTheme.bodyMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              GlassmorphismButton(
+                text: '분석 시작',
+                icon: Icons.play_arrow,
+                onPressed: () => Navigator.pushNamed(context, '/analysis'),
+              ),
+            ],
           ),
         ),
       );
@@ -301,46 +191,61 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 12),
           ...analysisProvider.results.take(5).map((result) {
             final riskColor = AppTheme.getRiskColor(result.riskScore);
-            return Card(
+            return GlassmorphismContainer(
               margin: const EdgeInsets.only(bottom: 8),
-              child: ListTile(
-                leading: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: riskColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Center(
-                    child: Text(
-                      '${result.riskScore.toStringAsFixed(0)}',
-                      style: TextStyle(
-                        color: riskColor,
-                        fontWeight: FontWeight.bold,
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: riskColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Center(
+                      child: Text(
+                        result.riskScore.toStringAsFixed(0),
+                        style: TextStyle(
+                          color: riskColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                title: Text(
-                  '${result.date.month}/${result.date.day} ${result.date.hour}:00',
-                ),
-                subtitle: Text(
-                  '외기 ${result.outdoorTemp.toStringAsFixed(1)}°C / ${result.outdoorHumidity.toStringAsFixed(0)}%',
-                ),
-                trailing: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: riskColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    result.riskLevel.label,
-                    style: TextStyle(
-                      color: riskColor,
-                      fontWeight: FontWeight.w500,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${result.date.month}/${result.date.day} ${result.date.hour}:00',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        Text(
+                          '외기 ${result.outdoorTemp.toStringAsFixed(1)}°C / ${result.outdoorHumidity.toStringAsFixed(0)}%',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
                     ),
                   ),
-                ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: riskColor.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      result.riskLevel.label,
+                      style: TextStyle(
+                        color: riskColor,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             );
           }),
@@ -350,12 +255,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _ActionCard extends StatelessWidget {
+class _GlassActionCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
 
-  const _ActionCard({
+  const _GlassActionCard({
     required this.icon,
     required this.label,
     required this.onTap,
@@ -365,25 +270,28 @@ class _ActionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Card(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Icon(
-                icon,
-                size: 32,
-                color: theme.colorScheme.primary,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: theme.textTheme.bodyMedium,
-              ),
-            ],
+    return GlassmorphismContainer(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                Icon(
+                  icon,
+                  size: 32,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ],
+            ),
           ),
         ),
       ),
