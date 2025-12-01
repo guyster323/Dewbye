@@ -11,48 +11,11 @@ class LocationSelectScreen extends StatefulWidget {
 
 class _LocationSelectScreenState extends State<LocationSelectScreen> {
   final TextEditingController _searchController = TextEditingController();
-  List<LocationSearchResult> _searchResults = [];
-  bool _isSearching = false;
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
-  }
-
-  Future<void> _search(String query) async {
-    if (query.length < 2) {
-      setState(() {
-        _searchResults = [];
-      });
-      return;
-    }
-
-    setState(() {
-      _isSearching = true;
-    });
-
-    // TODO: 실제 Geocoding API 호출 (Phase 3에서 구현)
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    // 샘플 검색 결과
-    setState(() {
-      _searchResults = [
-        LocationSearchResult(
-          name: '$query 시청',
-          address: '$query시 중구',
-          latitude: 37.5665,
-          longitude: 126.9780,
-        ),
-        LocationSearchResult(
-          name: '$query역',
-          address: '$query시 역전동',
-          latitude: 37.5547,
-          longitude: 126.9707,
-        ),
-      ];
-      _isSearching = false;
-    });
   }
 
   @override
@@ -79,14 +42,14 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                         icon: const Icon(Icons.clear),
                         onPressed: () {
                           _searchController.clear();
-                          setState(() {
-                            _searchResults = [];
-                          });
+                          locationProvider.clearSearchResults();
                         },
                       )
                     : null,
               ),
-              onChanged: _search,
+              onChanged: (query) {
+                locationProvider.searchLocation(query);
+              },
             ),
           ),
 
@@ -160,25 +123,25 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
               ),
             ),
 
-          // 검색 결과 또는 히스토리
+          // 검색 결과 또는 저장된 위치
           Expanded(
-            child: _isSearching
+            child: locationProvider.isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _searchResults.isNotEmpty
-                    ? _buildSearchResults(theme)
-                    : _buildLocationHistory(theme, locationProvider),
+                : locationProvider.searchResults.isNotEmpty
+                    ? _buildSearchResults(theme, locationProvider)
+                    : _buildSavedLocations(theme, locationProvider),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSearchResults(ThemeData theme) {
+  Widget _buildSearchResults(ThemeData theme, LocationProvider locationProvider) {
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: _searchResults.length,
+      itemCount: locationProvider.searchResults.length,
       itemBuilder: (context, index) {
-        final result = _searchResults[index];
+        final result = locationProvider.searchResults[index];
         return Card(
           margin: const EdgeInsets.only(bottom: 8),
           child: ListTile(
@@ -193,16 +156,14 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                 color: theme.colorScheme.secondary,
               ),
             ),
-            title: Text(result.name),
-            subtitle: Text(result.address),
+            title: Text(result.shortName),
+            subtitle: Text(result.displayName),
+            trailing: IconButton(
+              icon: const Icon(Icons.bookmark_border),
+              onPressed: () => locationProvider.saveLocation(result),
+            ),
             onTap: () {
-              final locationProvider = context.read<LocationProvider>();
-              locationProvider.setLocation(LocationData(
-                latitude: result.latitude,
-                longitude: result.longitude,
-                name: result.name,
-                address: result.address,
-              ));
+              locationProvider.selectLocation(result);
               Navigator.pop(context);
             },
           ),
@@ -211,25 +172,25 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
     );
   }
 
-  Widget _buildLocationHistory(ThemeData theme, LocationProvider locationProvider) {
-    if (locationProvider.locationHistory.isEmpty) {
+  Widget _buildSavedLocations(ThemeData theme, LocationProvider locationProvider) {
+    if (locationProvider.savedLocations.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              Icons.history,
+              Icons.bookmark_border,
               size: 48,
               color: theme.colorScheme.onSurface.withValues(alpha: 0.3),
             ),
             const SizedBox(height: 16),
             Text(
-              '검색 기록이 없습니다',
+              '저장된 위치가 없습니다',
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              '위치를 검색하거나 현재 위치를 사용하세요',
+              '위치를 검색하고 저장하세요',
               style: theme.textTheme.bodyMedium,
             ),
           ],
@@ -242,43 +203,61 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
       children: [
         Padding(
           padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                '최근 위치',
-                style: theme.textTheme.titleMedium,
-              ),
-              TextButton(
-                onPressed: () => locationProvider.clearHistory(),
-                child: const Text('전체 삭제'),
-              ),
-            ],
+          child: Text(
+            '저장된 위치',
+            style: theme.textTheme.titleMedium,
           ),
         ),
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: locationProvider.locationHistory.length,
+            itemCount: locationProvider.savedLocations.length,
             itemBuilder: (context, index) {
-              final location = locationProvider.locationHistory[index];
+              final saved = locationProvider.savedLocations[index];
               return Card(
                 margin: const EdgeInsets.only(bottom: 8),
                 child: ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
+                      color: saved.isFavorite
+                          ? theme.colorScheme.primary.withValues(alpha: 0.1)
+                          : theme.colorScheme.surface,
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.history),
+                    child: Icon(
+                      saved.isFavorite ? Icons.star : Icons.bookmark,
+                      color: saved.isFavorite
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onSurface,
+                    ),
                   ),
-                  title: Text(location.name ?? location.address ?? '알 수 없는 위치'),
+                  title: Text(saved.displayName),
                   subtitle: Text(
-                    '${location.latitude.toStringAsFixed(4)}, ${location.longitude.toStringAsFixed(4)}',
+                    '${saved.location.latitude.toStringAsFixed(4)}, ${saved.location.longitude.toStringAsFixed(4)}',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          saved.isFavorite ? Icons.star : Icons.star_border,
+                          color: saved.isFavorite
+                              ? theme.colorScheme.primary
+                              : null,
+                        ),
+                        onPressed: () =>
+                            locationProvider.toggleFavorite(saved.location),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () =>
+                            locationProvider.deleteLocation(saved.location),
+                      ),
+                    ],
                   ),
                   onTap: () {
-                    locationProvider.setLocation(location);
+                    locationProvider.selectLocation(saved.location);
                     Navigator.pop(context);
                   },
                 ),
@@ -289,18 +268,4 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
       ],
     );
   }
-}
-
-class LocationSearchResult {
-  final String name;
-  final String address;
-  final double latitude;
-  final double longitude;
-
-  LocationSearchResult({
-    required this.name,
-    required this.address,
-    required this.latitude,
-    required this.longitude,
-  });
 }

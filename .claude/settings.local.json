@@ -11,7 +11,12 @@
       "Bash(git add:*)",
       "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Phase 1 완료 - Flutter 프로젝트 초기 설정\n\n- Flutter 프로젝트 생성 (dewbye/)\n- 패키지 의존성 설정 (provider, dio, fl_chart, hive 등)\n- 테마 시스템 구현 (라이트/다크 모드)\n- 기본 네비게이션 구조 (5개 화면)\n- Provider 상태 관리 (Theme, Location, Analysis)\n- 분석 엔진 기본 구현 (이슬점 계산, 위험도 산정)\n- 차트 시각화 기본 구현 (fl_chart)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git push:*)",
-      "Bash(git remote:*)"
+      "Bash(git remote:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Phase 2 완료 - UI 컴포넌트 구현\n\n- Glassmorphism 디자인 시스템 (컨테이너, 버튼, 칩)\n- AppHeader 위젯 (다크모드 토글 애니메이션)\n- LocationInput 위젯 (위치 선택/검색)\n- 결로 애니메이션 (물방울 효과, 위험도 시각화)\n- 배경 슬라이드쇼 (날씨 조건별 그라데이션)\n- HomeScreen 업데이트 (새 위젯 적용)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(powershell.exe -Command \"cd C:\\Users\\windo\\Dewbye\\dewbye; flutter analyze\")",
+      "Bash(powershell.exe -Command \"cd C:\\Users\\windo\\Dewbye\\dewbye; flutter build apk --debug\")",
+      "Bash(powershell.exe -Command \"cd C:\\Users\\windo\\Dewbye; git status\")",
+      "Bash(powershell.exe -Command \"cd C:\\Users\\windo\\Dewbye; git add -A\")"
     ],
     "deny": [],
     "ask": []

@@ -2,9 +2,34 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/theme_provider.dart';
 import '../providers/location_provider.dart';
+import '../services/cache_service.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  final CacheService _cacheService = CacheService();
+  String _cacheSize = '계산 중...';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCacheSize();
+  }
+
+  Future<void> _loadCacheSize() async {
+    await _cacheService.openBoxes();
+    final size = await _cacheService.getCacheSize();
+    if (mounted) {
+      setState(() {
+        _cacheSize = _cacheService.formatCacheSize(size);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,10 +48,10 @@ class SettingsScreen extends StatelessWidget {
             theme,
             title: '앱 정보',
             children: [
-              ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: const Text('Dewbye'),
-                subtitle: const Text('버전 1.0.0'),
+              const ListTile(
+                leading: Icon(Icons.info_outline),
+                title: Text('Dewbye'),
+                subtitle: Text('버전 1.0.0'),
               ),
             ],
           ),
@@ -36,24 +61,12 @@ class SettingsScreen extends StatelessWidget {
             theme,
             title: '테마',
             children: [
-              RadioListTile<ThemeMode>(
-                title: const Text('시스템 설정'),
-                subtitle: const Text('기기 설정에 따름'),
-                value: ThemeMode.system,
-                groupValue: themeProvider.themeMode,
-                onChanged: (value) => themeProvider.setThemeMode(value!),
-              ),
-              RadioListTile<ThemeMode>(
-                title: const Text('라이트 모드'),
-                value: ThemeMode.light,
-                groupValue: themeProvider.themeMode,
-                onChanged: (value) => themeProvider.setThemeMode(value!),
-              ),
-              RadioListTile<ThemeMode>(
-                title: const Text('다크 모드'),
-                value: ThemeMode.dark,
-                groupValue: themeProvider.themeMode,
-                onChanged: (value) => themeProvider.setThemeMode(value!),
+              ListTile(
+                leading: const Icon(Icons.brightness_6),
+                title: const Text('테마 모드'),
+                subtitle: Text(_getThemeModeText(themeProvider.themeMode)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _showThemeDialog(context, themeProvider),
               ),
             ],
           ),
@@ -64,16 +77,16 @@ class SettingsScreen extends StatelessWidget {
             title: '데이터 관리',
             children: [
               ListTile(
-                leading: const Icon(Icons.history),
-                title: const Text('위치 기록 삭제'),
-                subtitle: Text('${locationProvider.locationHistory.length}개 항목'),
+                leading: const Icon(Icons.bookmark),
+                title: const Text('저장된 위치'),
+                subtitle: Text('${locationProvider.savedLocations.length}개 항목'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => _showClearHistoryDialog(context, locationProvider),
+                onTap: () => Navigator.pushNamed(context, '/location'),
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline),
                 title: const Text('캐시 삭제'),
-                subtitle: const Text('임시 데이터 삭제'),
+                subtitle: Text(_cacheSize),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => _showClearCacheDialog(context),
               ),
@@ -132,6 +145,17 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  String _getThemeModeText(ThemeMode mode) {
+    switch (mode) {
+      case ThemeMode.system:
+        return '시스템 설정';
+      case ThemeMode.light:
+        return '라이트 모드';
+      case ThemeMode.dark:
+        return '다크 모드';
+    }
+  }
+
   Widget _buildSection(
     ThemeData theme, {
     required String title,
@@ -156,36 +180,54 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Future<void> _showClearHistoryDialog(
+  Future<void> _showThemeDialog(
     BuildContext context,
-    LocationProvider locationProvider,
+    ThemeProvider themeProvider,
   ) async {
-    final confirmed = await showDialog<bool>(
+    await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('위치 기록 삭제'),
-        content: const Text('모든 위치 기록을 삭제하시겠습니까?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('삭제'),
-          ),
-        ],
+        title: const Text('테마 선택'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.brightness_auto),
+              title: const Text('시스템 설정'),
+              trailing: themeProvider.themeMode == ThemeMode.system
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () {
+                themeProvider.setThemeMode(ThemeMode.system);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.light_mode),
+              title: const Text('라이트 모드'),
+              trailing: themeProvider.themeMode == ThemeMode.light
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () {
+                themeProvider.setThemeMode(ThemeMode.light);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.dark_mode),
+              title: const Text('다크 모드'),
+              trailing: themeProvider.themeMode == ThemeMode.dark
+                  ? const Icon(Icons.check)
+                  : null,
+              onTap: () {
+                themeProvider.setThemeMode(ThemeMode.dark);
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
       ),
     );
-
-    if (confirmed == true) {
-      locationProvider.clearHistory();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('위치 기록이 삭제되었습니다')),
-        );
-      }
-    }
   }
 
   Future<void> _showClearCacheDialog(BuildContext context) async {
@@ -208,8 +250,9 @@ class SettingsScreen extends StatelessWidget {
     );
 
     if (confirmed == true) {
-      // TODO: 캐시 삭제 구현
-      if (context.mounted) {
+      await _cacheService.clearAllCache();
+      await _loadCacheSize();
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('캐시가 삭제되었습니다')),
         );

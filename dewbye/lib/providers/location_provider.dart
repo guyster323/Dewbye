@@ -1,127 +1,70 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:hive_flutter/hive_flutter.dart';
 import '../config/constants.dart';
-
-class LocationData {
-  final double latitude;
-  final double longitude;
-  final String? name;
-  final String? address;
-  final DateTime timestamp;
-
-  LocationData({
-    required this.latitude,
-    required this.longitude,
-    this.name,
-    this.address,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
-
-  Map<String, dynamic> toJson() => {
-        'latitude': latitude,
-        'longitude': longitude,
-        'name': name,
-        'address': address,
-        'timestamp': timestamp.toIso8601String(),
-      };
-
-  factory LocationData.fromJson(Map<String, dynamic> json) => LocationData(
-        latitude: json['latitude'] as double,
-        longitude: json['longitude'] as double,
-        name: json['name'] as String?,
-        address: json['address'] as String?,
-        timestamp: DateTime.parse(json['timestamp'] as String),
-      );
-
-  @override
-  String toString() => name ?? address ?? '$latitude, $longitude';
-}
+import '../models/location.dart';
+import '../services/location_service.dart';
+import '../services/cache_service.dart';
 
 class LocationProvider extends ChangeNotifier {
-  static const String _locationKey = 'current_location';
-  static const String _historyKey = 'location_history';
-  late Box _box;
+  final LocationService _locationService;
+  final CacheService _cacheService;
 
-  LocationData? _currentLocation;
-  List<LocationData> _locationHistory = [];
+  GeoLocation? _currentLocation;
+  List<SavedLocation> _savedLocations = [];
+  List<GeoLocation> _searchResults = [];
   bool _isLoading = false;
   String? _error;
 
-  LocationData? get currentLocation => _currentLocation;
-  List<LocationData> get locationHistory => _locationHistory;
+  LocationProvider({
+    LocationService? locationService,
+    CacheService? cacheService,
+  })  : _locationService = locationService ?? LocationService(),
+        _cacheService = cacheService ?? CacheService();
+
+  GeoLocation? get currentLocation => _currentLocation;
+  List<SavedLocation> get savedLocations => _savedLocations;
+  List<GeoLocation> get searchResults => _searchResults;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
+  /// 초기화
   Future<void> init() async {
-    _box = await Hive.openBox('location');
-    _loadSavedLocation();
-    _loadLocationHistory();
+    await _cacheService.openBoxes();
+    await _loadSavedLocations();
+    _loadLastLocation();
   }
 
-  void _loadSavedLocation() {
-    final saved = _box.get(_locationKey);
-    if (saved != null) {
-      _currentLocation = LocationData.fromJson(Map<String, dynamic>.from(saved));
+  /// 마지막 위치 불러오기
+  void _loadLastLocation() {
+    _currentLocation = _cacheService.getLastLocation();
+    if (_currentLocation != null) {
       notifyListeners();
     }
   }
 
-  void _loadLocationHistory() {
-    final history = _box.get(_historyKey);
-    if (history != null) {
-      _locationHistory = (history as List)
-          .map((e) => LocationData.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-      notifyListeners();
-    }
+  /// 저장된 위치 목록 불러오기
+  Future<void> _loadSavedLocations() async {
+    _savedLocations = await _cacheService.getSavedLocations();
+    notifyListeners();
   }
 
+  /// GPS로 현재 위치 가져오기
   Future<void> getCurrentLocation() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      // 권한 확인
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw Exception('위치 권한이 거부되었습니다.');
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        throw Exception('위치 권한이 영구적으로 거부되었습니다. 설정에서 권한을 허용해주세요.');
-      }
-
-      // 위치 서비스 확인
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw Exception('위치 서비스가 비활성화되어 있습니다.');
-      }
-
-      // 현재 위치 가져오기
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      _currentLocation = LocationData(
-        latitude: position.latitude,
-        longitude: position.longitude,
-        name: '현재 위치',
-      );
-
-      await _saveCurrentLocation();
-      await _addToHistory(_currentLocation!);
+      final geoLocation = await _locationService.getCurrentGeoLocation();
+      _currentLocation = geoLocation;
+      await _cacheService.setLastLocation(geoLocation);
     } catch (e) {
       _error = e.toString();
       // 기본 위치 사용 (서울)
-      _currentLocation = LocationData(
+      _currentLocation = GeoLocation(
         latitude: AppConstants.defaultLatitude,
         longitude: AppConstants.defaultLongitude,
         name: '서울',
+        country: '대한민국',
       );
     } finally {
       _isLoading = false;
@@ -129,39 +72,77 @@ class LocationProvider extends ChangeNotifier {
     }
   }
 
-  void setLocation(LocationData location) {
+  /// 위치 선택
+  Future<void> selectLocation(GeoLocation location) async {
     _currentLocation = location;
-    _saveCurrentLocation();
-    _addToHistory(location);
+    await _cacheService.setLastLocation(location);
+
+    // 검색 결과 초기화
+    _searchResults = [];
     notifyListeners();
   }
 
-  Future<void> _saveCurrentLocation() async {
-    if (_currentLocation != null) {
-      await _box.put(_locationKey, _currentLocation!.toJson());
+  /// 위치 검색
+  Future<void> searchLocation(String query) async {
+    if (query.trim().isEmpty) {
+      _searchResults = [];
+      notifyListeners();
+      return;
+    }
+
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      _searchResults = await _locationService.searchLocations(query);
+    } catch (e) {
+      _error = e.toString();
+      _searchResults = [];
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
-  Future<void> _addToHistory(LocationData location) async {
-    // 중복 제거
-    _locationHistory.removeWhere(
-      (l) => l.latitude == location.latitude && l.longitude == location.longitude,
+  /// 검색 결과 초기화
+  void clearSearchResults() {
+    _searchResults = [];
+    notifyListeners();
+  }
+
+  /// 위치 저장
+  Future<void> saveLocation(GeoLocation location, {String? alias}) async {
+    final savedLocation = SavedLocation(
+      location: location,
+      alias: alias,
     );
-    // 앞에 추가
-    _locationHistory.insert(0, location);
-    // 최대 10개 유지
-    if (_locationHistory.length > 10) {
-      _locationHistory = _locationHistory.sublist(0, 10);
-    }
-    await _box.put(_historyKey, _locationHistory.map((l) => l.toJson()).toList());
+    await _cacheService.saveLocation(savedLocation);
+    await _loadSavedLocations();
   }
 
-  void clearHistory() {
-    _locationHistory.clear();
-    _box.delete(_historyKey);
-    notifyListeners();
+  /// 위치 삭제
+  Future<void> deleteLocation(GeoLocation location) async {
+    await _cacheService.deleteLocation(location);
+    await _loadSavedLocations();
   }
 
+  /// 즐겨찾기 토글
+  Future<void> toggleFavorite(GeoLocation location) async {
+    await _cacheService.toggleFavorite(location);
+    await _loadSavedLocations();
+  }
+
+  /// 한국 내 위치 여부 확인
+  bool isCurrentLocationInKorea() {
+    if (_currentLocation == null) return false;
+    return _locationService.isInKorea(
+      _currentLocation!.latitude,
+      _currentLocation!.longitude,
+    );
+  }
+
+  /// 에러 초기화
   void clearError() {
     _error = null;
     notifyListeners();

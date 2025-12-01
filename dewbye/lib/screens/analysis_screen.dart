@@ -280,7 +280,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       return;
     }
 
-    await analysisProvider.analyze(
+    await analysisProvider.analyzeHistorical(
       latitude: locationProvider.currentLocation!.latitude,
       longitude: locationProvider.currentLocation!.longitude,
       startDate: _startDate,
@@ -353,7 +353,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                 ),
                 child: Center(
                   child: Text(
-                    '${result.riskScore.toStringAsFixed(0)}',
+                    result.riskScore.toStringAsFixed(0),
                     style: TextStyle(
                       color: riskColor,
                       fontWeight: FontWeight.bold,

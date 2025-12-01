@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import '../config/constants.dart';
+import '../models/weather_data.dart';
+import '../services/weather_api.dart';
+import '../services/kma_api.dart';
+import '../services/cache_service.dart';
 
 class AnalysisResult {
   final DateTime date;
@@ -25,6 +29,33 @@ class AnalysisResult {
     required this.recommendation,
     this.events = const [],
   });
+
+  Map<String, dynamic> toJson() => {
+        'date': date.toIso8601String(),
+        'outdoorTemp': outdoorTemp,
+        'outdoorHumidity': outdoorHumidity,
+        'dewPoint': dewPoint,
+        'indoorTemp': indoorTemp,
+        'indoorHumidity': indoorHumidity,
+        'riskScore': riskScore,
+        'riskLevel': riskLevel.name,
+        'recommendation': recommendation,
+      };
+
+  factory AnalysisResult.fromJson(Map<String, dynamic> json) => AnalysisResult(
+        date: DateTime.parse(json['date'] as String),
+        outdoorTemp: (json['outdoorTemp'] as num).toDouble(),
+        outdoorHumidity: (json['outdoorHumidity'] as num).toDouble(),
+        dewPoint: (json['dewPoint'] as num).toDouble(),
+        indoorTemp: (json['indoorTemp'] as num).toDouble(),
+        indoorHumidity: (json['indoorHumidity'] as num).toDouble(),
+        riskScore: (json['riskScore'] as num).toDouble(),
+        riskLevel: RiskLevel.values.firstWhere(
+          (e) => e.name == json['riskLevel'],
+          orElse: () => RiskLevel.safe,
+        ),
+        recommendation: json['recommendation'] as String,
+      );
 }
 
 class HvacEvent {
@@ -46,17 +77,31 @@ class HvacEvent {
 }
 
 class AnalysisProvider extends ChangeNotifier {
+  final WeatherApiService _weatherApi;
+  final KmaApiService _kmaApi;
+  final CacheService _cacheService;
+
   BuildingType _buildingType = BuildingType.standard;
   double _indoorTemp = AppConstants.defaultIndoorTemp;
   double _indoorHumidity = AppConstants.defaultIndoorHumidity;
   List<AnalysisResult> _results = [];
+  List<WeatherData> _weatherData = [];
   bool _isLoading = false;
   String? _error;
+
+  AnalysisProvider({
+    WeatherApiService? weatherApi,
+    KmaApiService? kmaApi,
+    CacheService? cacheService,
+  })  : _weatherApi = weatherApi ?? WeatherApiService(),
+        _kmaApi = kmaApi ?? KmaApiService(),
+        _cacheService = cacheService ?? CacheService();
 
   BuildingType get buildingType => _buildingType;
   double get indoorTemp => _indoorTemp;
   double get indoorHumidity => _indoorHumidity;
   List<AnalysisResult> get results => _results;
+  List<WeatherData> get weatherData => _weatherData;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -81,10 +126,33 @@ class AnalysisProvider extends ChangeNotifier {
     const double a = 17.27;
     const double b = 237.7;
 
-    final double gamma = (a * temp) / (b + temp) + (humidity / 100).clamp(0.01, 1.0);
+    final clampedHumidity = humidity.clamp(0.01, 100.0);
+    final double gamma = (a * temp) / (b + temp) + _ln(clampedHumidity / 100.0);
     final double dewPoint = (b * gamma) / (a - gamma);
 
     return dewPoint;
+  }
+
+  // 자연로그 계산
+  double _ln(double x) {
+    if (x <= 0) return double.negativeInfinity;
+    int n = 0;
+    while (x >= 2) {
+      x /= 2.718281828459045;
+      n++;
+    }
+    while (x < 0.5) {
+      x *= 2.718281828459045;
+      n--;
+    }
+    x -= 1;
+    double result = 0;
+    double term = x;
+    for (int i = 1; i <= 100; i++) {
+      result += term / i;
+      term *= -x;
+    }
+    return result + n;
   }
 
   // 절대습도 계산 (g/m³)
@@ -98,7 +166,6 @@ class AnalysisProvider extends ChangeNotifier {
   }
 
   double _exp(double x) {
-    // 간단한 지수 함수 근사
     double result = 1.0;
     double term = 1.0;
     for (int i = 1; i <= 20; i++) {
@@ -137,16 +204,13 @@ class AnalysisProvider extends ChangeNotifier {
 
     // 건물 기밀도 보정
     final airtightnessBonus = _buildingType.airtightness * 10;
-    riskScore = (riskScore - airtightnessBonus).clamp(0, 100);
+    riskScore = (riskScore - airtightnessBonus).clamp(0.0, 100.0);
 
     return riskScore;
   }
 
   // 권장 조치 생성
   String getRecommendation(double riskScore, double dewPoint, double indoorTemp) {
-    // margin 값은 향후 더 상세한 권장 조치에 활용 예정
-    // final margin = indoorTemp - dewPoint;
-
     if (riskScore >= 75) {
       return '즉시 환기 또는 제습이 필요합니다. 창문 주변 결로 발생 가능성이 매우 높습니다.';
     } else if (riskScore >= 50) {
@@ -158,7 +222,54 @@ class AnalysisProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> analyze({
+  /// 예보 기반 분석 (Open-Meteo API)
+  Future<void> analyzeForecast({
+    required double latitude,
+    required double longitude,
+    int forecastDays = 7,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // 캐시 확인
+      final cacheKey = _cacheService.getLocationCacheKey(latitude, longitude);
+      final cacheValid = await _cacheService.isWeatherCacheValid(cacheKey);
+
+      WeatherForecast? forecast;
+
+      if (cacheValid) {
+        forecast = await _cacheService.getCachedWeatherForecast(cacheKey);
+      }
+
+      if (forecast == null || forecast.isExpired) {
+        // API 호출
+        forecast = await _weatherApi.getForecastWeather(
+          latitude: latitude,
+          longitude: longitude,
+          forecastDays: forecastDays,
+          pastDays: 1,
+        );
+
+        // 캐시 저장
+        await _cacheService.cacheWeatherForecast(cacheKey, forecast);
+      }
+
+      _weatherData = forecast.hourlyData;
+      _results = _analyzeWeatherData(forecast.hourlyData);
+    } on WeatherApiException catch (e) {
+      _error = e.message;
+    } catch (e) {
+      _error = '분석 중 오류가 발생했습니다: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 과거 데이터 분석 (Archive API)
+  Future<void> analyzeHistorical({
     required double latitude,
     required double longitude,
     required DateTime startDate,
@@ -169,55 +280,138 @@ class AnalysisProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // TODO: 실제 API 호출 구현 (Phase 3에서)
-      // 현재는 샘플 데이터로 테스트
+      final forecast = await _weatherApi.getHistoricalWeather(
+        latitude: latitude,
+        longitude: longitude,
+        startDate: startDate,
+        endDate: endDate,
+      );
 
-      _results = _generateSampleResults(startDate, endDate);
+      _weatherData = forecast.hourlyData;
+      _results = _analyzeWeatherData(forecast.hourlyData);
+    } on WeatherApiException catch (e) {
+      _error = e.message;
     } catch (e) {
-      _error = e.toString();
+      _error = '분석 중 오류가 발생했습니다: $e';
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  List<AnalysisResult> _generateSampleResults(DateTime start, DateTime end) {
-    final results = <AnalysisResult>[];
-    var current = start;
+  /// 기상청 API 분석 (한국 전용, 더 높은 정확도)
+  Future<void> analyzeWithKma({
+    required int nx,
+    required int ny,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
 
-    while (current.isBefore(end) || current.isAtSameMomentAs(end)) {
-      // 샘플 데이터 생성
-      final outdoorTemp = 15.0 + (current.hour - 12).abs() * 0.5;
-      final outdoorHumidity = 60.0 + (current.hour % 12) * 2.0;
-      final dewPoint = calculateDewPoint(outdoorTemp, outdoorHumidity);
+    try {
+      final kmaData = await _kmaApi.getShortForecast(nx: nx, ny: ny);
+
+      if (kmaData.isEmpty) {
+        throw KmaApiException('기상 데이터를 가져올 수 없습니다');
+      }
+
+      // KMA 데이터를 WeatherData로 변환
+      _weatherData = kmaData.map((k) => k.toWeatherData()).toList();
+      _results = _analyzeWeatherData(_weatherData);
+    } on KmaApiException catch (e) {
+      _error = e.message;
+    } catch (e) {
+      _error = '기상청 API 분석 중 오류: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// 날씨 데이터 분석
+  List<AnalysisResult> _analyzeWeatherData(List<WeatherData> data) {
+    final results = <AnalysisResult>[];
+
+    for (final weather in data) {
       final riskScore = calculateRiskScore(
-        outdoorTemp: outdoorTemp,
-        outdoorHumidity: outdoorHumidity,
+        outdoorTemp: weather.temperature,
+        outdoorHumidity: weather.humidity,
         indoorTemp: _indoorTemp,
         indoorHumidity: _indoorHumidity,
       );
 
       results.add(AnalysisResult(
-        date: current,
-        outdoorTemp: outdoorTemp,
-        outdoorHumidity: outdoorHumidity,
-        dewPoint: dewPoint,
+        date: weather.time,
+        outdoorTemp: weather.temperature,
+        outdoorHumidity: weather.humidity,
+        dewPoint: weather.dewPoint,
         indoorTemp: _indoorTemp,
         indoorHumidity: _indoorHumidity,
         riskScore: riskScore,
         riskLevel: RiskLevel.fromScore(riskScore),
-        recommendation: getRecommendation(riskScore, dewPoint, _indoorTemp),
+        recommendation: getRecommendation(riskScore, weather.dewPoint, _indoorTemp),
       ));
-
-      current = current.add(const Duration(hours: 1));
     }
 
+    // 최신순 정렬
+    results.sort((a, b) => b.date.compareTo(a.date));
     return results;
+  }
+
+  /// 일별 요약 생성
+  Map<DateTime, DailySummary> getDailySummary() {
+    final Map<DateTime, List<AnalysisResult>> grouped = {};
+
+    for (final result in _results) {
+      final date = DateTime(result.date.year, result.date.month, result.date.day);
+      grouped.putIfAbsent(date, () => []).add(result);
+    }
+
+    final Map<DateTime, DailySummary> summary = {};
+
+    for (final entry in grouped.entries) {
+      final dayResults = entry.value;
+      final maxRisk = dayResults.map((r) => r.riskScore).reduce((a, b) => a > b ? a : b);
+      final minRisk = dayResults.map((r) => r.riskScore).reduce((a, b) => a < b ? a : b);
+      final avgRisk = dayResults.map((r) => r.riskScore).reduce((a, b) => a + b) / dayResults.length;
+      final highRiskHours = dayResults.where((r) => r.riskScore >= 50).length;
+
+      summary[entry.key] = DailySummary(
+        date: entry.key,
+        maxRiskScore: maxRisk,
+        minRiskScore: minRisk,
+        avgRiskScore: avgRisk,
+        highRiskHours: highRiskHours,
+        maxRiskLevel: RiskLevel.fromScore(maxRisk),
+      );
+    }
+
+    return summary;
   }
 
   void clearResults() {
     _results.clear();
+    _weatherData.clear();
     _error = null;
     notifyListeners();
   }
+}
+
+/// 일별 요약
+class DailySummary {
+  final DateTime date;
+  final double maxRiskScore;
+  final double minRiskScore;
+  final double avgRiskScore;
+  final int highRiskHours;
+  final RiskLevel maxRiskLevel;
+
+  DailySummary({
+    required this.date,
+    required this.maxRiskScore,
+    required this.minRiskScore,
+    required this.avgRiskScore,
+    required this.highRiskHours,
+    required this.maxRiskLevel,
+  });
 }
