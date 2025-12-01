@@ -159,22 +159,24 @@ enum HVACMode { heating, cooling, transitioning, idle }
 
 /// HVAC 모드 전환 이벤트
 class ModeTransitionEvent {
-  final DateTime timestamp;
-  final HVACMode fromMode;
-  final HVACMode toMode;
+  final DateTime time;
+  final HVACMode previousMode;
+  final HVACMode newMode;
   final double tempChangeRate;
   final double durationMinutes;
   final String reason;
-  final double riskScore;
+  final double? riskBefore;
+  final double? riskAfter;
 
   ModeTransitionEvent({
-    required this.timestamp,
-    required this.fromMode,
-    required this.toMode,
+    required this.time,
+    required this.previousMode,
+    required this.newMode,
     required this.tempChangeRate,
     required this.durationMinutes,
     required this.reason,
-    this.riskScore = 0,
+    this.riskBefore,
+    this.riskAfter,
   });
 }
 
@@ -232,9 +234,9 @@ class HVACModeDetector {
                 : '온도 안정화';
 
         events.add(ModeTransitionEvent(
-          timestamp: curr.time,
-          fromMode: previousMode,
-          toMode: currentMode,
+          time: curr.time,
+          previousMode: previousMode,
+          newMode: currentMode,
           tempChangeRate: dTperHour,
           durationMinutes: 0,
           reason: reason,
@@ -543,6 +545,7 @@ class CondensationPredictor {
           dewPoint: prediction.dewPoint,
           hoursUntil: prediction.time.difference(DateTime.now()).inHours,
           preventionActions: _getPreventionActions(gap, buildingType),
+          probability: 100,
         );
       }
 
@@ -555,6 +558,7 @@ class CondensationPredictor {
           hoursUntil: prediction.time.difference(DateTime.now()).inHours,
           preventionActions: _getPreventionActions(gap, buildingType),
           isWarning: true,
+          probability: prediction.condensationRisk,
         );
       }
     }
@@ -586,20 +590,22 @@ class CondensationPredictor {
 
 /// 결로 발생 예측 결과
 class CondensationPrediction {
-  final DateTime predictedTime;
+  final DateTime? predictedTime;
   final double predictedIndoorHumidity;
   final double dewPoint;
   final int hoursUntil;
   final List<String> preventionActions;
   final bool isWarning;
+  final double probability;
 
   CondensationPrediction({
-    required this.predictedTime,
+    this.predictedTime,
     required this.predictedIndoorHumidity,
     required this.dewPoint,
     required this.hoursUntil,
     required this.preventionActions,
     this.isWarning = false,
+    this.probability = 0,
   });
 
   String get urgencyText {
@@ -608,6 +614,6 @@ class CondensationPrediction {
     if (hoursUntil <= 6) return '6시간 이내';
     if (hoursUntil <= 12) return '12시간 이내';
     if (hoursUntil <= 24) return '24시간 이내';
-    return '${hoursUntil}시간 후';
+    return '$hoursUntil시간 후';
   }
 }

@@ -1,6 +1,6 @@
 # Dewbye 프로젝트 상태 및 TODO
 **날짜**: 2025년 12월 1일
-**상태**: Phase 1-4 완료, Phase 5 대기
+**상태**: Phase 1-5 완료, Phase 6 대기
 
 ---
 
@@ -77,6 +77,36 @@
   - 열지수 계산
   - HVAC 성능 페널티 계산
 
+### Phase 5: 시각화 개선 (12/1) ✅ 완료
+- [x] fl_chart 인터랙티브 그래프 개선 - `interactive_line_chart.dart`
+  - 터치 인터랙션 (포인트 선택)
+  - 멀티 라인 차트 지원
+  - 임계선 표시 (위험도 레벨)
+  - 툴팁 및 선택 정보 표시
+- [x] 이벤트 타임라인 리스트 - `event_timeline.dart`
+  - 시간순 이벤트 표시
+  - 이벤트 유형별 아이콘/색상
+  - HVAC 모드 전환 이벤트
+  - 결로 예측 이벤트
+  - 날짜별 그룹화
+- [x] 상세 분석 테이블 - `analysis_table.dart`
+  - 페이지네이션 데이터 테이블
+  - 정렬 기능 (시간, 위험도, 온도, 습도)
+  - 요약 카드 (평균/최대/최소 위험도)
+  - 일별 요약 테이블
+- [x] 위험도 게이지 애니메이션 - `risk_gauge.dart`
+  - 원형 게이지 (애니메이션)
+  - 미니 게이지 (리스트용)
+  - 수평 위험도 바
+  - 위험 구간 시각화
+- [x] GraphScreen 개선
+  - 탭 기반 네비게이션 (위험도/온습도/이슬점/타임라인)
+  - 현재 위험도 게이지 표시
+  - 선택 데이터 상세 정보
+- [x] HomeScreen 업데이트
+  - 게이지 + 애니메이션 조합
+  - 위험도 바 추가
+
 ---
 
 ## 현재 파일 구조
@@ -103,28 +133,34 @@ Dewbye/
     │   │   ├── location_provider.dart   # ⭐ 서비스 통합
     │   │   └── analysis_provider.dart   # ⭐ API 연동
     │   ├── screens/
-    │   │   ├── home_screen.dart         # ⭐ 새 위젯 적용
+    │   │   ├── home_screen.dart         # ⭐ 게이지 적용
     │   │   ├── location_select_screen.dart  # ⭐ 검색 기능
     │   │   ├── analysis_screen.dart
-    │   │   ├── graph_screen.dart
+    │   │   ├── graph_screen.dart        # ⭐ Phase 5 개선
     │   │   └── settings_screen.dart     # ⭐ 캐시 관리
-    │   ├── widgets/             # ⭐ Phase 2 완료
+    │   ├── widgets/
     │   │   ├── widgets.dart     # export 파일
     │   │   ├── glassmorphism_container.dart
     │   │   ├── header.dart
     │   │   ├── location_input.dart
     │   │   ├── condensation_animation.dart
-    │   │   └── background_slideshow.dart
-    │   ├── models/              # ⭐ Phase 3 완료
+    │   │   ├── background_slideshow.dart
+    │   │   └── charts/          # ⭐ Phase 5 신규
+    │   │       ├── charts.dart  # export 파일
+    │   │       ├── interactive_line_chart.dart
+    │   │       ├── risk_gauge.dart
+    │   │       ├── event_timeline.dart
+    │   │       └── analysis_table.dart
+    │   ├── models/
     │   │   ├── weather_data.dart
     │   │   └── location.dart
-    │   ├── services/            # ⭐ Phase 3 완료
+    │   ├── services/
     │   │   ├── services.dart    # export 파일
     │   │   ├── weather_api.dart # Open-Meteo API
     │   │   ├── kma_api.dart     # 기상청 API
     │   │   ├── location_service.dart
     │   │   └── cache_service.dart
-    │   └── utils/               # ⭐ Phase 4 완료
+    │   └── utils/
     │       ├── utils.dart       # export 파일
     │       ├── hvac_analytics.dart  # HVAC 분석 엔진
     │       └── report_generator.dart # 리포트 생성기
@@ -148,12 +184,6 @@ Dewbye/
 ---
 
 ## 다음 단계 TODO
-
-### Phase 5: 시각화 개선
-- [ ] fl_chart 인터랙티브 그래프 개선
-- [ ] 이벤트 타임라인 리스트
-- [ ] 상세 분석 테이블
-- [ ] 위험도 게이지 애니메이션
 
 ### Phase 6: 내보내기 & 마무리
 - [ ] CSV 내보내기
@@ -189,7 +219,7 @@ Dewbye/
 - 위치 서비스 (Geolocator)
 - 캐시 시스템 (Hive)
 
-### 분석 엔진 (Phase 4 완료)
+### 분석 엔진
 - Magnus 공식 기반 이슬점 계산
 - 건물 기밀도(4단계) 기반 위험도 보정
 - 권장 조치 자동 생성
@@ -199,6 +229,15 @@ Dewbye/
 - 기밀도별 습도 응답 예측
 - 결로 발생 시점 예측
 - 절대습도, 습구온도, 열지수 계산
+
+### 시각화 (Phase 5 신규)
+- 인터랙티브 라인 차트 (터치, 툴팁)
+- 멀티 라인 차트 (범례 토글)
+- 원형 위험도 게이지 (애니메이션)
+- 수평 위험도 바
+- 이벤트 타임라인 (유형별 아이콘)
+- 페이지네이션 데이터 테이블
+- 일별 요약 테이블
 
 ---
 
@@ -241,8 +280,8 @@ dependencies:
 
 - **로컬**: 초기화 완료
 - **원격**: `https://github.com/guyster323/Dewbye.git`
-- **최근 커밋**: Phase 3 완료
-- **다음 커밋**: Phase 4 완료
+- **최근 커밋**: Phase 4 완료
+- **다음 커밋**: Phase 5 완료
 
 ---
 
@@ -251,8 +290,8 @@ dependencies:
 - **Debug APK**: `dewbye/build/app/outputs/flutter-apk/app-debug.apk`
 - **Flutter 버전**: 최신 stable
 - **Dart SDK**: ^3.9.2
-- **빌드 시간**: ~12초
+- **빌드 시간**: ~11초
 
 ---
 
-**마지막 업데이트**: 2025년 12월 1일 (Phase 4 완료)
+**마지막 업데이트**: 2025년 12월 1일 (Phase 5 완료)

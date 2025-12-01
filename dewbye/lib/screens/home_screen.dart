@@ -92,10 +92,29 @@ class _HomeScreenState extends State<HomeScreen> {
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 16),
-            CondensationAnimation(
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // 기존 애니메이션
+                CondensationAnimation(
+                  riskScore: riskScore,
+                  size: 140,
+                  showLabel: false,
+                ),
+                const SizedBox(width: 16),
+                // 새로운 게이지
+                RiskGauge(
+                  riskScore: riskScore,
+                  size: 140,
+                  showLabel: true,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // 위험도 바
+            RiskBar(
               riskScore: riskScore,
-              size: 180,
-              showLabel: true,
+              height: 12,
             ),
             const SizedBox(height: 16),
             if (analysisProvider.results.isNotEmpty)
