@@ -233,14 +233,25 @@ class CacheService {
     return GeoLocation.fromJson(json);
   }
 
-  /// 알림 설정 저장
+  /// 알림 설정 저장 (기본)
   Future<void> setNotificationEnabled(bool enabled) async {
     await setSetting('notification_enabled', enabled);
   }
 
-  /// 알림 설정 조회
+  /// 알림 설정 조회 (기본)
   bool getNotificationEnabled() {
     return getSetting<bool>('notification_enabled', defaultValue: true) ?? true;
+  }
+
+  /// 알림 설정 전체 저장
+  Future<void> saveNotificationSettings(dynamic settings) async {
+    await setSetting('notification_settings', settings.toJson());
+  }
+
+  /// 알림 설정 전체 조회
+  Future<dynamic> getNotificationSettings() async {
+    final json = getSettingJson('notification_settings');
+    return json;
   }
 
   /// 기상청 API 키 저장

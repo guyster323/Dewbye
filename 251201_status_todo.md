@@ -183,14 +183,34 @@ Dewbye/
 
 ---
 
+## 완료된 Phase 6: 내보내기 & 알림
+
+### Phase 6: 내보내기 & 마무리 ✅ 완료
+- [x] CSV 내보내기 (`export_service.dart`)
+  - 시간별 분석 데이터 CSV
+  - 일별 요약 CSV
+  - UTF-8 BOM (Excel 한글 호환)
+- [x] PDF 리포트 생성 (`export_service.dart`)
+  - A4 포맷 리포트
+  - 기본정보, 요약통계, 위험등급 분포
+  - 상위 위험 시간대 테이블
+- [x] 알림 기능 (`notification_service.dart`)
+  - NotificationSettings 클래스
+  - 위험/경고/HVAC/결로예측 알림 토글
+  - InAppNotificationBanner 위젯
+- [x] 설정 화면 업데이트 (`settings_screen.dart`)
+  - 알림 설정 UI
+  - 내보내기 버튼 (CSV, PDF, 일별요약)
+- [x] 테스트 프로시저 작성 (`TEST_PROCEDURE.md`)
+
+---
+
 ## 다음 단계 TODO
 
-### Phase 6: 내보내기 & 마무리
-- [ ] CSV 내보내기
-- [ ] PDF 리포트 생성
-- [ ] 알림 기능 (위험도 기준)
+### Phase 7: 배포 준비
 - [ ] 성능 최적화
 - [ ] Play Store 배포 준비
+- [ ] 푸시 알림 구현 (firebase_messaging)
 
 ---
 
@@ -239,6 +259,15 @@ Dewbye/
 - 페이지네이션 데이터 테이블
 - 일별 요약 테이블
 
+### 내보내기 & 알림 (Phase 6 신규)
+- CSV 내보내기 (UTF-8 BOM, Excel 호환)
+- PDF 리포트 생성 (A4 포맷)
+- 일별 요약 CSV 생성
+- Share Plus를 통한 파일 공유
+- 알림 설정 (위험/경고/HVAC/결로예측)
+- 인앱 알림 배너 위젯
+- 알림 설정 저장 (Hive)
+
 ---
 
 ## 설치된 패키지
@@ -280,8 +309,8 @@ dependencies:
 
 - **로컬**: 초기화 완료
 - **원격**: `https://github.com/guyster323/Dewbye.git`
-- **최근 커밋**: Phase 4 완료
-- **다음 커밋**: Phase 5 완료
+- **최근 커밋**: Phase 6 완료 (내보내기 & 알림)
+- **다음 커밋**: Phase 7 (배포 준비)
 
 ---
 
@@ -294,4 +323,4 @@ dependencies:
 
 ---
 
-**마지막 업데이트**: 2025년 12월 1일 (Phase 5 완료)
+**마지막 업데이트**: 2025년 12월 1일 (Phase 6 완료)
