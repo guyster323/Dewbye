@@ -1,6 +1,6 @@
 # Dewbye 프로젝트 상태 및 TODO
 **날짜**: 2025년 12월 1일
-**상태**: Phase 1-3 완료, Phase 4 대기
+**상태**: Phase 1-4 완료, Phase 5 대기
 
 ---
 
@@ -54,6 +54,29 @@
   - LocationProvider 업데이트
   - AnalysisProvider 업데이트
 
+### Phase 4: 분석 엔진 강화 (12/1) ✅ 완료
+- [x] HVAC 로직 취약 시간대 예측 - `hvac_analytics.dart`
+  - HVAC 모드 전환 감지 (heating/cooling/idle)
+  - 취약 시간대 자동 감지
+  - 온도 변화율 분석
+- [x] 기밀도별 습도 응답 예측
+  - 건물 유형별 응답 지연 시간
+  - 댐핑 효과 계산
+  - 시간별 실내 습도 예측
+- [x] 결로 발생 시점 예측 알고리즘
+  - 이슬점 도달 시점 예측
+  - 예방 조치 자동 생성
+  - 위험도 기반 경고
+- [x] 일별/주별 요약 리포트 생성 - `report_generator.dart`
+  - DailyReport 클래스
+  - WeeklyReport 클래스
+  - 트렌드 분석
+  - 권장사항 자동 생성
+- [x] 분석 유틸리티 함수
+  - 절대습도, 포화증기압, 습구온도
+  - 열지수 계산
+  - HVAC 성능 페널티 계산
+
 ---
 
 ## 현재 파일 구조
@@ -101,7 +124,10 @@ Dewbye/
     │   │   ├── kma_api.dart     # 기상청 API
     │   │   ├── location_service.dart
     │   │   └── cache_service.dart
-    │   └── utils/               # Phase 4에서 구현 예정
+    │   └── utils/               # ⭐ Phase 4 완료
+    │       ├── utils.dart       # export 파일
+    │       ├── hvac_analytics.dart  # HVAC 분석 엔진
+    │       └── report_generator.dart # 리포트 생성기
     ├── assets/
     │   ├── images/
     │   └── animations/
@@ -122,12 +148,6 @@ Dewbye/
 ---
 
 ## 다음 단계 TODO
-
-### Phase 4: 분석 엔진 강화
-- [ ] HVAC 로직 취약 시간대 예측
-- [ ] 기밀도별 습도 응답 예측
-- [ ] 결로 발생 시점 예측 알고리즘
-- [ ] 일별/주별 요약 리포트 생성
 
 ### Phase 5: 시각화 개선
 - [ ] fl_chart 인터랙티브 그래프 개선
@@ -169,11 +189,16 @@ Dewbye/
 - 위치 서비스 (Geolocator)
 - 캐시 시스템 (Hive)
 
-### 분석 엔진
+### 분석 엔진 (Phase 4 완료)
 - Magnus 공식 기반 이슬점 계산
 - 건물 기밀도(4단계) 기반 위험도 보정
 - 권장 조치 자동 생성
-- 일별 요약 통계
+- 일별/주별 요약 리포트
+- HVAC 모드 전환 감지
+- 취약 시간대 자동 감지
+- 기밀도별 습도 응답 예측
+- 결로 발생 시점 예측
+- 절대습도, 습구온도, 열지수 계산
 
 ---
 
@@ -216,8 +241,8 @@ dependencies:
 
 - **로컬**: 초기화 완료
 - **원격**: `https://github.com/guyster323/Dewbye.git`
-- **최근 커밋**: Phase 2 완료
-- **다음 커밋**: Phase 3 완료
+- **최근 커밋**: Phase 3 완료
+- **다음 커밋**: Phase 4 완료
 
 ---
 
@@ -230,4 +255,4 @@ dependencies:
 
 ---
 
-**마지막 업데이트**: 2025년 12월 1일 (Phase 3 완료)
+**마지막 업데이트**: 2025년 12월 1일 (Phase 4 완료)

@@ -4,6 +4,8 @@ import '../models/weather_data.dart';
 import '../services/weather_api.dart';
 import '../services/kma_api.dart';
 import '../services/cache_service.dart';
+import '../utils/hvac_analytics.dart';
+import '../utils/report_generator.dart';
 
 class AnalysisResult {
   final DateTime date;
@@ -394,6 +396,78 @@ class AnalysisProvider extends ChangeNotifier {
     _weatherData.clear();
     _error = null;
     notifyListeners();
+  }
+
+  // ============ Phase 4: 고급 분석 기능 ============
+
+  /// 취약 시간대 감지
+  List<VulnerableTimeSlot> getVulnerableTimeSlots() {
+    if (_weatherData.isEmpty) return [];
+    return HVACModeDetector.detectVulnerableTimeSlots(_weatherData, _buildingType);
+  }
+
+  /// HVAC 모드 전환 이벤트 감지
+  List<ModeTransitionEvent> getModeTransitions({double setpoint = 22.0}) {
+    if (_weatherData.isEmpty) return [];
+    return HVACModeDetector.detectModeTransitions(_weatherData, setpoint);
+  }
+
+  /// 습도 예측 (시간별)
+  List<HumidityPrediction> getHumidityPredictions() {
+    if (_weatherData.isEmpty) return [];
+    return BuildingHumidityResponse.predictHumidityOverTime(
+      _indoorHumidity,
+      _weatherData,
+      _buildingType,
+    );
+  }
+
+  /// 결로 발생 예측
+  CondensationPrediction? getCondensationPrediction() {
+    if (_weatherData.isEmpty) return null;
+    return CondensationPredictor.predictCondensationTime(
+      _weatherData,
+      _indoorTemp,
+      _indoorHumidity,
+      _buildingType,
+    );
+  }
+
+  /// 일별 리포트 생성
+  List<DailyReport> generateDailyReports() {
+    if (_weatherData.isEmpty || _results.isEmpty) return [];
+    return ReportGenerator.generateDailyReportsFromAnalysis(
+      _weatherData,
+      _results,
+      _buildingType,
+    );
+  }
+
+  /// 주별 리포트 생성
+  WeeklyReport? generateWeeklyReport() {
+    final dailyReports = generateDailyReports();
+    if (dailyReports.isEmpty) return null;
+    return ReportGenerator.generateWeeklyReport(dailyReports);
+  }
+
+  /// 외기 조건 평가
+  OutdoorConditionAssessment? getCurrentOutdoorAssessment() {
+    if (_weatherData.isEmpty) return null;
+    final latest = _weatherData.first;
+    return OutdoorEnvironmentAnalyzer.assessOutdoorCondition(
+      latest.temperature,
+      latest.humidity,
+    );
+  }
+
+  /// HVAC 성능 페널티 계산
+  double getCurrentPerformancePenalty() {
+    if (_weatherData.isEmpty) return 1.0;
+    final latest = _weatherData.first;
+    return OutdoorEnvironmentAnalyzer.performancePenalty(
+      latest.temperature,
+      latest.humidity,
+    );
   }
 }
 
