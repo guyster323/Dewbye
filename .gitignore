@@ -1,0 +1,38 @@
+# Flutter/Dart
+dewbye/.dart_tool/
+dewbye/.packages
+dewbye/build/
+dewbye/.flutter-plugins
+dewbye/.flutter-plugins-dependencies
+dewbye/.pub-cache/
+dewbye/.pub/
+dewbye/pubspec.lock
+
+# Android
+dewbye/android/.gradle/
+dewbye/android/local.properties
+dewbye/android/*.iml
+dewbye/android/key.properties
+dewbye/android/**/*.keystore
+
+# iOS
+dewbye/ios/.symlinks/
+dewbye/ios/Pods/
+dewbye/ios/Flutter/Flutter.framework
+dewbye/ios/Flutter/Flutter.podspec
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Environment
+.env
+.env.*
+*.env
+
+# Logs
+*.log
