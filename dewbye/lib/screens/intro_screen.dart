@@ -136,33 +136,62 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
-    if (!_locationPermissionGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('위치 권한이 필요합니다')),
-      );
-      return;
-    }
-
     setState(() {
       _isLoadingLocation = true;
     });
 
     try {
+      // 웹에서는 위치 서비스 활성화 확인
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        // 서비스가 비활성화되어 있으면 기본 위치 사용 (서울)
+        _setDefaultLocation();
+        return;
+      }
+
+      // 위치 권한 확인
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          _setDefaultLocation();
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        _setDefaultLocation();
+        return;
+      }
+
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('위치 가져오기 시간 초과');
+        },
       );
 
-      final placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
+      String locationName = 'Current Location';
+      
+      // geocoding은 웹에서 불안정할 수 있으므로 try-catch로 감싸기
+      if (!kIsWeb) {
+        try {
+          final placemarks = await placemarkFromCoordinates(
+            position.latitude,
+            position.longitude,
+          );
 
-      String locationName = '현재 위치';
-      if (placemarks.isNotEmpty) {
-        final place = placemarks.first;
-        locationName = '${place.locality ?? ''} ${place.subLocality ?? ''}'.trim();
-        if (locationName.isEmpty) {
-          locationName = '현재 위치';
+          if (placemarks.isNotEmpty) {
+            final place = placemarks.first;
+            locationName = '${place.locality ?? ''} ${place.subLocality ?? ''}'.trim();
+            if (locationName.isEmpty) {
+              locationName = 'Current Location';
+            }
+          }
+        } catch (e) {
+          debugPrint('Geocoding 오류: $e');
         }
       }
 
@@ -172,35 +201,153 @@ class _IntroScreenState extends State<IntroScreen> {
           longitude: position.longitude,
           locationName: locationName,
         );
-        _locationDisplay = locationName;
+        _locationDisplay = '$locationName (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
+        _locationPermissionGranted = true;
       });
     } catch (e) {
       debugPrint('위치 가져오기 오류: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('위치를 가져올 수 없습니다: $e')),
-        );
-      }
+      _setDefaultLocation();
     } finally {
       setState(() {
         _isLoadingLocation = false;
       });
     }
   }
+  
+  /// 기본 위치 설정 (서울)
+  void _setDefaultLocation() {
+    setState(() {
+      _userSettings = _userSettings.copyWith(
+        latitude: 37.5665,
+        longitude: 126.9780,
+        locationName: 'Seoul, South Korea',
+      );
+      _locationDisplay = 'Seoul (기본 위치)';
+      _locationPermissionGranted = true;
+      _storagePermissionGranted = true;
+      _isLoadingLocation = false;
+    });
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('위치를 가져올 수 없어 서울로 설정되었습니다. 위치 검색으로 변경할 수 있습니다.'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+  }
 
   Future<void> _selectLocation() async {
-    // 위치 선택 화면으로 이동 (나중에 구현)
-    final result = await Navigator.of(context).pushNamed('/location');
-    if (result != null && result is Map<String, dynamic>) {
-      setState(() {
-        _userSettings = _userSettings.copyWith(
-          latitude: result['latitude'] as double?,
-          longitude: result['longitude'] as double?,
-          locationName: result['name'] as String?,
-        );
-        _locationDisplay = result['name'] as String? ?? '선택된 위치';
-      });
+    // 위치 선택 화면으로 이동
+    try {
+      final result = await Navigator.of(context).pushNamed('/location');
+      if (result != null && result is Map<String, dynamic>) {
+        setState(() {
+          _userSettings = _userSettings.copyWith(
+            latitude: result['latitude'] as double?,
+            longitude: result['longitude'] as double?,
+            locationName: result['name'] as String?,
+          );
+          _locationDisplay = result['name'] as String? ?? '선택된 위치';
+          _locationPermissionGranted = true;
+          _storagePermissionGranted = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('위치 선택 오류: $e');
+      // 위치 선택 화면이 없는 경우 수동 입력 대화상자 표시
+      _showManualLocationDialog();
     }
+  }
+  
+  /// 수동 위치 입력 대화상자
+  void _showManualLocationDialog() {
+    final latController = TextEditingController(text: '37.5665');
+    final lngController = TextEditingController(text: '126.9780');
+    final nameController = TextEditingController(text: 'Seoul');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.grey[900],
+        title: const Text('위치 입력', style: TextStyle(color: Colors.white)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: '위치 이름',
+                labelStyle: TextStyle(color: Colors.white70),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white30),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: latController,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: '위도 (Latitude)',
+                labelStyle: TextStyle(color: Colors.white70),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white30),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: lngController,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: '경도 (Longitude)',
+                labelStyle: TextStyle(color: Colors.white70),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(color: Colors.white30),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final lat = double.tryParse(latController.text);
+              final lng = double.tryParse(lngController.text);
+              final name = nameController.text.trim();
+              
+              if (lat != null && lng != null && name.isNotEmpty) {
+                setState(() {
+                  _userSettings = _userSettings.copyWith(
+                    latitude: lat,
+                    longitude: lng,
+                    locationName: name,
+                  );
+                  _locationDisplay = '$name ($lat, $lng)';
+                  _locationPermissionGranted = true;
+                  _storagePermissionGranted = true;
+                });
+                Navigator.pop(context);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('올바른 위치 정보를 입력해주세요')),
+                );
+              }
+            },
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _startAnalysis() {
