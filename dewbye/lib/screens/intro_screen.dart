@@ -1,9 +1,11 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:video_player/video_player.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import '../models/user_settings.dart';
 import '../widgets/glassmorphism_container.dart';
 import '../widgets/web_video_player.dart';
@@ -179,23 +181,44 @@ class _IntroScreenState extends State<IntroScreen> {
         _locationPermissionGranted = true; // 오류 시 기본 허용
       }
 
-      // 저장소 권한 확인 (Android 13+에서는 필요 없음)
+      // 저장소 권한 확인 및 요청
       try {
-        final isRestricted = await Permission.storage.isRestricted
-            .timeout(const Duration(seconds: 3));
-        if (!isRestricted) {
+        // Android 버전에 따라 다른 권한 요청
+        // Android 13+ (API 33+): photos, videos 권한 사용
+        // Android 12 이하: storage 권한 사용
+        final sdkInt = await _getAndroidSdkVersion();
+
+        if (sdkInt >= 33) {
+          // Android 13+: 미디어 권한 요청
+          final photosStatus = await Permission.photos.status
+              .timeout(const Duration(seconds: 3));
+          if (!photosStatus.isGranted) {
+            final results = await [
+              Permission.photos,
+              Permission.videos,
+            ].request().timeout(const Duration(seconds: 5));
+
+            _storagePermissionGranted =
+                results[Permission.photos]?.isGranted == true ||
+                results[Permission.videos]?.isGranted == true;
+          } else {
+            _storagePermissionGranted = true;
+          }
+        } else {
+          // Android 12 이하: 저장소 권한 요청
           var storageStatus = await Permission.storage.status
               .timeout(const Duration(seconds: 3));
           if (!storageStatus.isGranted) {
             storageStatus = await Permission.storage.request()
-                .timeout(const Duration(seconds: 3));
+                .timeout(const Duration(seconds: 5));
           }
           _storagePermissionGranted = storageStatus.isGranted;
-        } else {
-          _storagePermissionGranted = true;
         }
+
+        debugPrint('저장소 권한 상태: $_storagePermissionGranted (SDK: $sdkInt)');
       } catch (e) {
         debugPrint('저장소 권한 확인 오류: $e');
+        // 오류 시에도 앱 사용 가능하도록 허용
         _storagePermissionGranted = true;
       }
 
@@ -208,6 +231,24 @@ class _IntroScreenState extends State<IntroScreen> {
           debugPrint('위치 가져오기 실패: $e');
         }
       }
+    }
+  }
+
+  /// Android SDK 버전 가져오기
+  Future<int> _getAndroidSdkVersion() async {
+    if (kIsWeb) return 0;
+
+    try {
+      if (Platform.isAndroid) {
+        final deviceInfo = DeviceInfoPlugin();
+        final androidInfo = await deviceInfo.androidInfo;
+        debugPrint('Android SDK 버전: ${androidInfo.version.sdkInt}');
+        return androidInfo.version.sdkInt;
+      }
+      return 0; // iOS 등 다른 플랫폼
+    } catch (e) {
+      debugPrint('SDK 버전 확인 오류: $e');
+      return 33; // 오류 시 Android 13으로 가정
     }
   }
 
