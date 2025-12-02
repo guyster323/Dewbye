@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import '../models/weather_data.dart';
 import '../models/location.dart';
+import '../models/user_settings.dart';
 
 /// Hive 캐시 서비스
 class CacheService {
@@ -262,6 +264,31 @@ class CacheService {
   /// 기상청 API 키 조회
   String? getKmaApiKey() {
     return getSetting<String>('kma_api_key');
+  }
+
+  /// 사용자 설정 저장
+  Future<void> saveUserSettings(UserSettings settings) async {
+    final box = _settingsBox;
+    if (box == null) return;
+    
+    await box.put('user_settings', jsonEncode(settings.toJson()));
+  }
+
+  /// 사용자 설정 조회
+  UserSettings? getUserSettings() {
+    final box = _settingsBox;
+    if (box == null) return null;
+    
+    final value = box.get('user_settings');
+    if (value == null) return null;
+    
+    try {
+      final json = jsonDecode(value as String) as Map<String, dynamic>;
+      return UserSettings.fromJson(json);
+    } catch (e) {
+      debugPrint('UserSettings 로드 오류: $e');
+      return null;
+    }
   }
 
   // ==================== 분석 결과 캐시 ====================
