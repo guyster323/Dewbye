@@ -12,24 +12,11 @@ class GraphScreen extends StatefulWidget {
   State<GraphScreen> createState() => _GraphScreenState();
 }
 
-class _GraphScreenState extends State<GraphScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+class _GraphScreenState extends State<GraphScreen> {
+  int _currentTabIndex = 0;
   int? _selectedDataIndex;
   DateTime? _startDate;
   DateTime? _endDate;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,24 +33,29 @@ class _GraphScreenState extends State<GraphScreen>
             tooltip: '기간 선택',
           ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabs: const [
-            Tab(icon: Icon(Icons.show_chart), text: '위험도'),
-            Tab(icon: Icon(Icons.thermostat), text: '온습도'),
-            Tab(icon: Icon(Icons.water_drop), text: '이슬점'),
-            Tab(icon: Icon(Icons.timeline), text: '타임라인'),
-          ],
-        ),
       ),
       body: SafeArea(
         child: analysisProvider.results.isEmpty
             ? _buildEmptyState(theme)
             : Column(
                 children: [
+                  // 탭 버튼 (스와이프 대신 버튼으로 전환)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _buildTabButton(0, Icons.show_chart, '위험도', theme),
+                          _buildTabButton(1, Icons.thermostat, '온습도', theme),
+                          _buildTabButton(2, Icons.water_drop, '이슬점', theme),
+                          _buildTabButton(3, Icons.timeline, '타임라인', theme),
+                        ],
+                      ),
+                    ),
+                  ),
                   // 현재 위험도 게이지
-                  if (_tabController.index != 3)
+                  if (_currentTabIndex != 3)
                     Container(
                       padding: const EdgeInsets.all(16),
                       child: Row(
@@ -105,17 +97,9 @@ class _GraphScreenState extends State<GraphScreen>
                         ],
                       ),
                     ),
-                  // 탭 콘텐츠
+                  // 탭 콘텐츠 (스와이프 없이 직접 표시)
                   Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildRiskChart(theme, analysisProvider),
-                        _buildTempHumidityChart(theme, analysisProvider),
-                        _buildDewPointChart(theme, analysisProvider),
-                        _buildTimeline(theme, analysisProvider),
-                      ],
-                    ),
+                    child: _buildTabContent(theme, analysisProvider),
                   ),
                   // 선택된 데이터 정보
                   if (_selectedDataIndex != null &&
@@ -128,6 +112,46 @@ class _GraphScreenState extends State<GraphScreen>
               ),
       ),
     );
+  }
+
+  Widget _buildTabButton(int index, IconData icon, String label, ThemeData theme) {
+    final isSelected = _currentTabIndex == index;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: ChoiceChip(
+        avatar: Icon(
+          icon,
+          size: 18,
+          color: isSelected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+        ),
+        label: Text(label),
+        selected: isSelected,
+        onSelected: (_) {
+          setState(() {
+            _currentTabIndex = index;
+          });
+        },
+        selectedColor: theme.colorScheme.primary,
+        labelStyle: TextStyle(
+          color: isSelected ? theme.colorScheme.onPrimary : theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabContent(ThemeData theme, AnalysisProvider provider) {
+    switch (_currentTabIndex) {
+      case 0:
+        return _buildRiskChart(theme, provider);
+      case 1:
+        return _buildTempHumidityChart(theme, provider);
+      case 2:
+        return _buildDewPointChart(theme, provider);
+      case 3:
+        return _buildTimeline(theme, provider);
+      default:
+        return _buildRiskChart(theme, provider);
+    }
   }
 
   Widget _buildEmptyState(ThemeData theme) {

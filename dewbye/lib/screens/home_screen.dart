@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/theme.dart';
 import '../config/constants.dart';
+import '../models/user_settings.dart';
 import '../providers/location_provider.dart';
 import '../providers/analysis_provider.dart';
 import '../widgets/widgets.dart';
@@ -14,15 +15,53 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  bool _settingsApplied = false;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyUserSettings();
+    });
+  }
+
+  void _applyUserSettings() {
+    if (_settingsApplied) return;
+
+    final args = ModalRoute.of(context)?.settings.arguments;
+    debugPrint('HomeScreen: args = $args, type = ${args.runtimeType}');
+    if (args is UserSettings) {
+      debugPrint('HomeScreen: UserSettings 적용 - buildingType=${args.buildingType}, temp=${args.indoorTemperature}, humidity=${args.indoorHumidity}');
+      final analysisProvider = context.read<AnalysisProvider>();
+      final locationProvider = context.read<LocationProvider>();
+
+      // AnalysisProvider에 설정 적용
+      analysisProvider.setBuildingType(args.buildingType);
+      analysisProvider.setIndoorConditions(
+        temp: args.indoorTemperature,
+        humidity: args.indoorHumidity,
+      );
+      debugPrint('HomeScreen: 적용 후 - buildingType=${analysisProvider.buildingType}, temp=${analysisProvider.indoorTemp}, humidity=${analysisProvider.indoorHumidity}');
+
+      // LocationProvider에 위치 설정 적용
+      if (args.latitude != null && args.longitude != null) {
+        locationProvider.setLocationFromCoordinates(
+          latitude: args.latitude!,
+          longitude: args.longitude!,
+          displayName: args.locationName ?? '선택된 위치',
+        );
+      } else if (locationProvider.currentLocation == null) {
+        locationProvider.getCurrentLocation();
+      }
+
+      _settingsApplied = true;
+    } else {
+      // arguments가 없으면 기본 위치 가져오기
       final locationProvider = context.read<LocationProvider>();
       if (locationProvider.currentLocation == null) {
         locationProvider.getCurrentLocation();
       }
-    });
+    }
   }
 
   @override

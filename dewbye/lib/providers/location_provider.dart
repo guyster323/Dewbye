@@ -82,6 +82,22 @@ class LocationProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// 좌표로 위치 설정 (Intro에서 전달된 설정용)
+  Future<void> setLocationFromCoordinates({
+    required double latitude,
+    required double longitude,
+    required String displayName,
+  }) async {
+    _currentLocation = GeoLocation(
+      latitude: latitude,
+      longitude: longitude,
+      name: displayName,
+      country: '',
+    );
+    await _cacheService.setLastLocation(_currentLocation!);
+    notifyListeners();
+  }
+
   /// 위치 검색
   Future<void> searchLocation(String query) async {
     // 공백 제거 후 빈 문자열 체크

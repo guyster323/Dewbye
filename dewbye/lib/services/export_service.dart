@@ -5,7 +5,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import '../providers/analysis_provider.dart';
 import '../config/constants.dart';
 // Conditional web download import
@@ -183,6 +183,9 @@ class ExportService {
 
       final pdf = pw.Document();
 
+      // ASCII-only location name for PDF (default fonts don't support Korean)
+      final safeLocationName = _toAsciiSafe(locationNameEnglish ?? locationName, latitude, longitude);
+
       // 통계 계산
       final avgRisk = results.map((r) => r.riskScore).reduce((a, b) => a + b) / results.length;
       final maxRisk = results.map((r) => r.riskScore).reduce((a, b) => a > b ? a : b);
@@ -212,11 +215,8 @@ class ExportService {
       // 마지막 날 데이터
       final lastDay = DateTime(endDate.year, endDate.month, endDate.day);
 
-      // 영문 주소 (좌표 포함)
-      String locationDisplay = locationNameEnglish ?? locationName;
-      if (latitude != null && longitude != null) {
-        locationDisplay += ' (${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)})';
-      }
+      // 영문 주소 (좌표 포함) - ASCII safe
+      String locationDisplay = safeLocationName;
 
       pdf.addPage(
         pw.MultiPage(
@@ -310,19 +310,19 @@ class ExportService {
               ),
             pw.SizedBox(height: 20),
 
-            // 고위험 일자별 24시간 차트
-            ...highRiskDays.take(5).expand((day) => [
-              pw.Header(level: 2, text: 'Daily Analysis: ${DateFormat('yyyy-MM-dd').format(day)}'),
+            // 고위험 일자별 24시간 차트 (상위 10개)
+            ...highRiskDays.take(10).expand((day) => [
+              pw.Header(level: 2, text: 'High Risk Day: ${DateFormat('yyyy-MM-dd').format(day)}'),
               pw.SizedBox(height: 10),
-              _buildDailyCharts(sortedResults, day),
+              _buildDailyChart(sortedResults, day),
               pw.SizedBox(height: 20),
             ]),
 
-            // 마지막 날 24시간 차트 (고위험일이 아닌 경우에만)
+            // 마지막 날 차트 (고위험일이 아닌 경우에만)
             if (!highRiskDays.contains(lastDay)) ...[
-              pw.Header(level: 2, text: 'Last Day Analysis: ${DateFormat('yyyy-MM-dd').format(lastDay)}'),
+              pw.Header(level: 2, text: 'Last Day: ${DateFormat('yyyy-MM-dd').format(lastDay)}'),
               pw.SizedBox(height: 10),
-              _buildDailyCharts(sortedResults, lastDay),
+              _buildDailyChart(sortedResults, lastDay),
               pw.SizedBox(height: 20),
             ],
 
@@ -365,13 +365,15 @@ class ExportService {
         await file.writeAsBytes(bytes);
         return file;
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('PDF 생성 오류: $e');
+      debugPrint('Stack trace: $stackTrace');
       return null;
     }
   }
 
-  /// 일별 24시간 차트 생성
-  static pw.Widget _buildDailyCharts(List<AnalysisResult> allResults, DateTime day) {
+  /// 일별 24시간 차트 (텍스트 기반 시각화)
+  static pw.Widget _buildDailyChart(List<AnalysisResult> allResults, DateTime day) {
     final dayResults = allResults.where((r) =>
         r.date.year == day.year &&
         r.date.month == day.month &&
@@ -382,84 +384,194 @@ class ExportService {
       return pw.Text('No data available for this day.');
     }
 
-    // 시간별 데이터 테이블
+    // 요약 통계 계산
+    final maxRisk = dayResults.map((r) => r.riskScore).reduce((a, b) => a > b ? a : b);
+    final minRisk = dayResults.map((r) => r.riskScore).reduce((a, b) => a < b ? a : b);
+    final avgRisk = dayResults.map((r) => r.riskScore).reduce((a, b) => a + b) / dayResults.length;
+
+    // 고위험 시간대 찾기
+    final highRiskHours = dayResults.where((r) => r.riskScore >= 75).map((r) => r.date.hour).toList();
+
+    // 시간별 데이터 맵 생성 (0-23시)
+    final hourlyData = <int, AnalysisResult>{};
+    for (final r in dayResults) {
+      hourlyData[r.date.hour] = r;
+    }
+
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        // 위험도 차트 (텍스트 기반)
-        pw.Text('Risk Score (24h):', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-        pw.SizedBox(height: 5),
-        _buildHourlyBarChart(dayResults, (r) => r.riskScore, '%', maxValue: 100),
-        pw.SizedBox(height: 15),
-
-        // 온습도 + 이슬점 테이블
-        pw.Text('Temperature & Humidity (24h):', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-        pw.SizedBox(height: 5),
-        _buildPdfTable(
-          headers: ['Hour', 'Outdoor Temp', 'Humidity', 'Dew Point', 'Indoor Temp', 'Risk'],
-          rows: dayResults.map((r) => [
-            '${r.date.hour.toString().padLeft(2, '0')}:00',
-            '${r.outdoorTemp.toStringAsFixed(1)}C',
-            '${r.outdoorHumidity.toStringAsFixed(0)}%',
-            '${r.dewPoint.toStringAsFixed(1)}C',
-            '${r.indoorTemp.toStringAsFixed(1)}C',
-            '${r.riskScore.toStringAsFixed(0)}%',
-          ]).toList(),
+        // 요약 정보
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text('Max: ${maxRisk.toStringAsFixed(0)}%', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+            pw.Text('Avg: ${avgRisk.toStringAsFixed(0)}%'),
+            pw.Text('Min: ${minRisk.toStringAsFixed(0)}%'),
+          ],
         ),
+        pw.SizedBox(height: 8),
+
+        // 24시간 막대 차트 (텍스트 기반)
+        pw.Container(
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey400),
+          ),
+          child: pw.Column(
+            children: [
+              // 차트 영역
+              pw.Container(
+                height: 80,
+                child: pw.Row(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: List.generate(24, (hour) {
+                    final result = hourlyData[hour];
+                    final risk = result?.riskScore ?? 0;
+                    final barHeight = (risk / 100) * 70;
+                    final color = risk >= 75 ? PdfColors.red
+                        : risk >= 50 ? PdfColors.orange
+                        : risk >= 25 ? PdfColors.yellow
+                        : PdfColors.green;
+
+                    return pw.Expanded(
+                      child: pw.Container(
+                        height: barHeight,
+                        margin: const pw.EdgeInsets.symmetric(horizontal: 0.5),
+                        decoration: pw.BoxDecoration(
+                          color: color,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+              // X축 라벨
+              pw.Container(
+                padding: const pw.EdgeInsets.only(top: 2),
+                child: pw.Row(
+                  mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                  children: [
+                    pw.Text('0', style: const pw.TextStyle(fontSize: 6)),
+                    pw.Text('6', style: const pw.TextStyle(fontSize: 6)),
+                    pw.Text('12', style: const pw.TextStyle(fontSize: 6)),
+                    pw.Text('18', style: const pw.TextStyle(fontSize: 6)),
+                    pw.Text('23', style: const pw.TextStyle(fontSize: 6)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        pw.SizedBox(height: 8),
+
+        // 범례
+        pw.Row(
+          children: [
+            _buildLegendItem(PdfColors.red, 'Danger (>=75%)'),
+            pw.SizedBox(width: 10),
+            _buildLegendItem(PdfColors.orange, 'Warning (50-74%)'),
+            pw.SizedBox(width: 10),
+            _buildLegendItem(PdfColors.yellow, 'Caution (25-49%)'),
+            pw.SizedBox(width: 10),
+            _buildLegendItem(PdfColors.green, 'Safe (<25%)'),
+          ],
+        ),
+        pw.SizedBox(height: 8),
+
+        // 고위험 시간대
+        if (highRiskHours.isNotEmpty)
+          pw.Text(
+            'High Risk Hours: ${highRiskHours.map((h) => '${h.toString().padLeft(2, '0')}:00').join(', ')}',
+            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.red),
+          ),
+
+        // 시간별 상세 테이블 (간소화)
+        pw.SizedBox(height: 8),
+        _buildHourlyTable(dayResults),
       ],
     );
   }
 
-  /// 시간별 막대 차트 (텍스트 기반)
-  static pw.Widget _buildHourlyBarChart(
-    List<AnalysisResult> results,
-    double Function(AnalysisResult) getValue,
-    String unit, {
-    double maxValue = 100,
-  }) {
-    const barWidth = 15.0;
-    const maxBarHeight = 60.0;
-
-    return pw.Container(
-      height: maxBarHeight + 30,
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.end,
-        mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
-        children: results.map((r) {
-          final value = getValue(r);
-          final barHeight = (value / maxValue) * maxBarHeight;
-          final color = value >= 90
-              ? PdfColors.red
-              : value >= 75
-                  ? PdfColors.orange
-                  : value >= 50
-                      ? PdfColors.yellow800
-                      : value >= 25
-                          ? PdfColors.green
-                          : PdfColors.blue;
-
-          return pw.Column(
-            mainAxisAlignment: pw.MainAxisAlignment.end,
-            children: [
-              pw.Text(
-                value.toStringAsFixed(0),
-                style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold),
-              ),
-              pw.Container(
-                width: barWidth,
-                height: barHeight.clamp(2, maxBarHeight),
-                color: color,
-              ),
-              pw.SizedBox(height: 2),
-              pw.Text(
-                '${r.date.hour}',
-                style: const pw.TextStyle(fontSize: 6),
-              ),
-            ],
-          );
-        }).toList(),
-      ),
+  /// 범례 아이템
+  static pw.Widget _buildLegendItem(PdfColor color, String label) {
+    return pw.Row(
+      mainAxisSize: pw.MainAxisSize.min,
+      children: [
+        pw.Container(width: 8, height: 8, color: color),
+        pw.SizedBox(width: 2),
+        pw.Text(label, style: const pw.TextStyle(fontSize: 7)),
+      ],
     );
+  }
+
+  /// 시간별 상세 테이블
+  static pw.Widget _buildHourlyTable(List<AnalysisResult> dayResults) {
+    // 6시간 간격으로 주요 데이터만 표시
+    final keyHours = [0, 6, 12, 18];
+    final tableRows = <List<String>>[];
+
+    for (final hour in keyHours) {
+      final result = dayResults.where((r) => r.date.hour == hour).firstOrNull;
+      if (result != null) {
+        tableRows.add([
+          '${hour.toString().padLeft(2, '0')}:00',
+          '${result.riskScore.toStringAsFixed(0)}%',
+          '${result.outdoorTemp.toStringAsFixed(1)}C',
+          '${result.outdoorHumidity.toStringAsFixed(0)}%',
+          '${result.dewPoint.toStringAsFixed(1)}C',
+        ]);
+      }
+    }
+
+    if (tableRows.isEmpty) return pw.SizedBox();
+
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.grey300),
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+          children: ['Time', 'Risk', 'Temp', 'Humidity', 'Dew Point'].map((h) => pw.Padding(
+            padding: const pw.EdgeInsets.all(4),
+            child: pw.Text(h, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8)),
+          )).toList(),
+        ),
+        ...tableRows.map((row) => pw.TableRow(
+          children: row.map((cell) => pw.Padding(
+            padding: const pw.EdgeInsets.all(4),
+            child: pw.Text(cell, style: const pw.TextStyle(fontSize: 8)),
+          )).toList(),
+        )),
+      ],
+    );
+  }
+
+  /// Convert location name to ASCII-safe string for PDF
+  /// Non-ASCII characters are replaced with coordinates
+  static String _toAsciiSafe(String name, double? lat, double? lon) {
+    // Check if string contains non-ASCII characters
+    final hasNonAscii = name.runes.any((r) => r > 127);
+
+    if (!hasNonAscii) {
+      // Already ASCII-safe, add coordinates if available
+      if (lat != null && lon != null) {
+        return '$name (${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)})';
+      }
+      return name;
+    }
+
+    // Has non-ASCII, use coordinates as primary identifier
+    if (lat != null && lon != null) {
+      // Extract any ASCII parts from the name
+      final asciiParts = name.replaceAll(RegExp(r'[^\x00-\x7F]+'), '').trim();
+      if (asciiParts.isNotEmpty) {
+        return 'Location: ${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)} ($asciiParts)';
+      }
+      return 'Location: ${lat.toStringAsFixed(4)}, ${lon.toStringAsFixed(4)}';
+    }
+
+    // No coordinates, try to extract ASCII parts
+    final asciiOnly = name.replaceAll(RegExp(r'[^\x00-\x7F]+'), ' ').trim();
+    return asciiOnly.isEmpty ? 'Unknown Location' : asciiOnly;
   }
 
   static String _getBuildingTypeName(BuildingType type) {

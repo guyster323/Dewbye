@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import '../config/constants.dart';
 import '../models/user_settings.dart';
 import '../widgets/glassmorphism_container.dart';
 import '../widgets/web_video_player.dart';
@@ -793,7 +794,8 @@ class _IntroScreenState extends State<IntroScreen> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<BuildingType>(
-                initialValue: _userSettings.buildingType,
+                // ignore: deprecated_member_use
+                value: _userSettings.buildingType,
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: Colors.white.withValues(alpha: 0.1),

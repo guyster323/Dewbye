@@ -46,6 +46,14 @@ class InteractiveLineChart extends StatefulWidget {
 
 class _InteractiveLineChartState extends State<InteractiveLineChart> {
   int? _selectedIndex;
+  final TransformationController _transformController = TransformationController();
+  double _currentScale = 1.0;
+
+  @override
+  void dispose() {
+    _transformController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,112 +94,182 @@ class _InteractiveLineChartState extends State<InteractiveLineChart> {
               ),
             ),
           ),
-        Expanded(
-          child: InteractiveViewer(
-            minScale: 1.0,
-            maxScale: 5.0,
-            panEnabled: true,
-            scaleEnabled: true,
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(
-                  show: widget.showGrid,
-                  drawVerticalLine: false,
-                  horizontalInterval: (maxY - minY) / 4,
-                  getDrawingHorizontalLine: (value) {
-                    return FlLine(
-                      color: theme.dividerColor.withValues(alpha: 0.5),
-                      strokeWidth: 1,
-                    );
-                  },
+        // 줌 레벨 표시 및 리셋 버튼
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (_currentScale > 1.01)
+                Text(
+                  '${(_currentScale * 100).toStringAsFixed(0)}%',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
+                  ),
                 ),
-                titlesData: _buildTitlesData(theme, minY, maxY),
-                borderData: FlBorderData(show: false),
-                minY: minY,
-                maxY: maxY,
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    curveSmoothness: 0.3,
-                    color: lineColor,
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: FlDotData(
-                      show: widget.showDots || _selectedIndex != null,
-                      getDotPainter: (spot, percent, barData, index) {
-                        final isSelected = index == _selectedIndex;
-                        return FlDotCirclePainter(
-                          radius: isSelected ? 8 : 4,
-                          color: isSelected
-                              ? lineColor
-                              : lineColor.withValues(alpha: 0.7),
-                          strokeWidth: isSelected ? 3 : 2,
-                          strokeColor: Colors.white,
+              if (_currentScale > 1.01) ...[
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () {
+                    _transformController.value = Matrix4.identity();
+                    setState(() {
+                      _currentScale = 1.0;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.zoom_out_map, size: 14, color: theme.colorScheme.onSurface),
+                        const SizedBox(width: 4),
+                        Text('리셋', style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              if (_currentScale <= 1.01)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.pinch, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      '핀치 줌으로 확대',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return InteractiveViewer(
+                transformationController: _transformController,
+                minScale: 1.0,
+                maxScale: 5.0,
+                panEnabled: true,
+                scaleEnabled: true,
+                onInteractionUpdate: (details) {
+                  setState(() {
+                    _currentScale = _transformController.value.getMaxScaleOnAxis();
+                  });
+                },
+                child: SizedBox(
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  child: LineChart(
+                  LineChartData(
+                    gridData: FlGridData(
+                      show: widget.showGrid,
+                      drawVerticalLine: false,
+                      horizontalInterval: (maxY - minY) / 4,
+                      getDrawingHorizontalLine: (value) {
+                        return FlLine(
+                          color: theme.dividerColor.withValues(alpha: 0.5),
+                          strokeWidth: 1,
                         );
                       },
                     ),
-                    belowBarData: widget.showArea
-                        ? BarAreaData(
-                            show: true,
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                widget.gradientStartColor ??
-                                    lineColor.withValues(alpha: 0.4),
-                                widget.gradientEndColor ??
-                                    lineColor.withValues(alpha: 0.0),
-                              ],
-                            ),
-                          )
-                        : null,
-                  ),
-                ],
-                extraLinesData: _buildExtraLines(theme),
-                lineTouchData: LineTouchData(
-                  enabled: true,
-                  touchCallback: (event, response) {
-                    if (event is FlTapUpEvent && response?.lineBarSpots != null) {
-                      final touchedSpot = response!.lineBarSpots!.first;
-                      final index = touchedSpot.x.toInt();
-                      setState(() {
-                        _selectedIndex = index;
-                      });
-                      widget.onPointTap?.call(index, widget.dataPoints[index]);
-                    }
-                  },
-                  touchTooltipData: LineTouchTooltipData(
-                    fitInsideHorizontally: true,
-                    fitInsideVertically: true,
-                    getTooltipItems: (touchedSpots) {
-                      return touchedSpots.map((spot) {
-                        final index = spot.x.toInt();
-                        if (index < 0 || index >= widget.dataPoints.length) {
-                          return null;
+                    titlesData: _buildTitlesData(theme, minY, maxY),
+                    borderData: FlBorderData(show: false),
+                    minY: minY,
+                    maxY: maxY,
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: spots,
+                        isCurved: true,
+                        curveSmoothness: 0.3,
+                        color: lineColor,
+                        barWidth: 3,
+                        isStrokeCapRound: true,
+                        dotData: FlDotData(
+                          show: widget.showDots || _selectedIndex != null,
+                          getDotPainter: (spot, percent, barData, index) {
+                            final isSelected = index == _selectedIndex;
+                            return FlDotCirclePainter(
+                              radius: isSelected ? 8 : 4,
+                              color: isSelected
+                                  ? lineColor
+                                  : lineColor.withValues(alpha: 0.7),
+                              strokeWidth: isSelected ? 3 : 2,
+                              strokeColor: Colors.white,
+                            );
+                          },
+                        ),
+                        belowBarData: widget.showArea
+                            ? BarAreaData(
+                                show: true,
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    widget.gradientStartColor ??
+                                        lineColor.withValues(alpha: 0.4),
+                                    widget.gradientEndColor ??
+                                        lineColor.withValues(alpha: 0.0),
+                                  ],
+                                ),
+                              )
+                            : null,
+                      ),
+                    ],
+                    extraLinesData: _buildExtraLines(theme),
+                    lineTouchData: LineTouchData(
+                      enabled: true,
+                      touchCallback: (event, response) {
+                        if (event is FlTapUpEvent && response?.lineBarSpots != null) {
+                          final touchedSpot = response!.lineBarSpots!.first;
+                          final index = touchedSpot.x.toInt();
+                          setState(() {
+                            _selectedIndex = index;
+                          });
+                          widget.onPointTap?.call(index, widget.dataPoints[index]);
                         }
-                        final point = widget.dataPoints[index];
-                        final yLabel = widget.yLabelFormatter?.call(point.value) ??
-                            point.value.toStringAsFixed(1);
-                        // 날짜 + 시간 형식으로 표시
-                        final dateStr = '${point.time.year}/${point.time.month}/${point.time.day}';
-                        final timeStr = '${point.time.hour.toString().padLeft(2, '0')}:${point.time.minute.toString().padLeft(2, '0')}';
-                        return LineTooltipItem(
-                          '$dateStr $timeStr\n$yLabel',
-                          TextStyle(
-                            color: theme.colorScheme.onSurface,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        );
-                      }).toList();
-                    },
+                      },
+                      touchTooltipData: LineTouchTooltipData(
+                        fitInsideHorizontally: true,
+                        fitInsideVertically: true,
+                        getTooltipItems: (touchedSpots) {
+                          return touchedSpots.map((spot) {
+                            final index = spot.x.toInt();
+                            if (index < 0 || index >= widget.dataPoints.length) {
+                              return null;
+                            }
+                            final point = widget.dataPoints[index];
+                            final yLabel = widget.yLabelFormatter?.call(point.value) ??
+                                point.value.toStringAsFixed(1);
+                            // 날짜 + 시간 형식으로 표시
+                            final dateStr = '${point.time.year}/${point.time.month}/${point.time.day}';
+                            final timeStr = '${point.time.hour.toString().padLeft(2, '0')}:${point.time.minute.toString().padLeft(2, '0')}';
+                            return LineTooltipItem(
+                              '$dateStr $timeStr\n$yLabel',
+                              TextStyle(
+                                color: theme.colorScheme.onSurface,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            );
+                          }).toList();
+                        },
+                      ),
+                    ),
                   ),
+                  duration: const Duration(milliseconds: 300),
                 ),
               ),
-              duration: const Duration(milliseconds: 300),
-            ),
-          ),
+            );
+          },
         ),
+      ),
         if (_selectedIndex != null)
           _buildSelectedInfo(theme, widget.dataPoints[_selectedIndex!]),
       ],
@@ -397,6 +475,14 @@ class MultiLineChart extends StatefulWidget {
 
 class _MultiLineChartState extends State<MultiLineChart> {
   final Set<int> _hiddenSeries = {};
+  final TransformationController _transformController = TransformationController();
+  double _currentScale = 1.0;
+
+  @override
+  void dispose() {
+    _transformController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -451,101 +537,171 @@ class _MultiLineChartState extends State<MultiLineChart> {
             padding: const EdgeInsets.only(bottom: 16),
             child: _buildLegend(theme),
           ),
-        Expanded(
-          child: InteractiveViewer(
-            minScale: 1.0,
-            maxScale: 5.0,
-            panEnabled: true,
-            scaleEnabled: true,
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(
-                  show: widget.showGrid,
-                  drawVerticalLine: false,
-                  horizontalInterval: (maxY - minY) / 4,
-                  getDrawingHorizontalLine: (value) {
-                    return FlLine(
-                      color: theme.dividerColor.withValues(alpha: 0.5),
-                      strokeWidth: 1,
-                    );
-                  },
-                ),
-                titlesData: _buildTitlesData(theme, minY, maxY),
-                borderData: FlBorderData(show: false),
-                minY: minY,
-                maxY: maxY,
-                lineBarsData: widget.series.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final series = entry.value;
-                  final isHidden = _hiddenSeries.contains(index);
-
-                  final spots = series.dataPoints.asMap().entries.map((e) {
-                    return FlSpot(e.key.toDouble(), e.value.value);
-                  }).toList();
-
-                  return LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    curveSmoothness: 0.3,
-                    color: isHidden
-                        ? Colors.transparent
-                        : series.color ?? theme.colorScheme.primary,
-                    barWidth: 2,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: false),
-                    dashArray: series.isDashed ? [5, 5] : null,
-                  );
-                }).toList(),
-                lineTouchData: LineTouchData(
-                  touchTooltipData: LineTouchTooltipData(
-                    fitInsideHorizontally: true,
-                    fitInsideVertically: true,
-                    getTooltipItems: (touchedSpots) {
-                      final items = <LineTooltipItem?>[];
-                      // 첫 번째 포인트에서 날짜/시간 정보 추가
-                      bool dateAdded = false;
-                      for (final spot in touchedSpots) {
-                        final seriesIndex = spot.barIndex;
-                        if (_hiddenSeries.contains(seriesIndex)) {
-                          items.add(null);
-                          continue;
-                        }
-                        final series = widget.series[seriesIndex];
-                        final pointIndex = spot.x.toInt();
-                        if (pointIndex < 0 || pointIndex >= series.dataPoints.length) {
-                          items.add(null);
-                          continue;
-                        }
-                        final point = series.dataPoints[pointIndex];
-
-                        String text;
-                        if (!dateAdded) {
-                          // 첫 번째 항목에 날짜/시간 추가
-                          final dateStr = '${point.time.year}/${point.time.month}/${point.time.day}';
-                          final timeStr = '${point.time.hour.toString().padLeft(2, '0')}:${point.time.minute.toString().padLeft(2, '0')}';
-                          text = '$dateStr $timeStr\n${series.name}: ${point.value.toStringAsFixed(1)}';
-                          dateAdded = true;
-                        } else {
-                          text = '${series.name}: ${point.value.toStringAsFixed(1)}';
-                        }
-
-                        items.add(LineTooltipItem(
-                          text,
-                          TextStyle(
-                            color: series.color ?? theme.colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ));
-                      }
-                      return items;
-                    },
+        // 줌 레벨 표시 및 리셋 버튼
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              if (_currentScale > 1.01)
+                Text(
+                  '${(_currentScale * 100).toStringAsFixed(0)}%',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.primary,
                   ),
                 ),
-              ),
-              duration: const Duration(milliseconds: 300),
-            ),
+              if (_currentScale > 1.01) ...[
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: () {
+                    _transformController.value = Matrix4.identity();
+                    setState(() {
+                      _currentScale = 1.0;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.zoom_out_map, size: 14, color: theme.colorScheme.onSurface),
+                        const SizedBox(width: 4),
+                        Text('리셋', style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              if (_currentScale <= 1.01)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.pinch, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(
+                      '핀치 줌으로 확대',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
           ),
         ),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return InteractiveViewer(
+                transformationController: _transformController,
+                minScale: 1.0,
+                maxScale: 5.0,
+                panEnabled: true,
+                scaleEnabled: true,
+                onInteractionUpdate: (details) {
+                  setState(() {
+                    _currentScale = _transformController.value.getMaxScaleOnAxis();
+                  });
+                },
+                child: SizedBox(
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                  child: LineChart(
+                    LineChartData(
+                      gridData: FlGridData(
+                        show: widget.showGrid,
+                        drawVerticalLine: false,
+                        horizontalInterval: (maxY - minY) / 4,
+                        getDrawingHorizontalLine: (value) {
+                          return FlLine(
+                            color: theme.dividerColor.withValues(alpha: 0.5),
+                            strokeWidth: 1,
+                          );
+                        },
+                      ),
+                      titlesData: _buildTitlesData(theme, minY, maxY),
+                      borderData: FlBorderData(show: false),
+                      minY: minY,
+                      maxY: maxY,
+                      lineBarsData: widget.series.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final series = entry.value;
+                        final isHidden = _hiddenSeries.contains(index);
+
+                        final spots = series.dataPoints.asMap().entries.map((e) {
+                          return FlSpot(e.key.toDouble(), e.value.value);
+                        }).toList();
+
+                        return LineChartBarData(
+                          spots: spots,
+                          isCurved: true,
+                          curveSmoothness: 0.3,
+                          color: isHidden
+                              ? Colors.transparent
+                              : series.color ?? theme.colorScheme.primary,
+                          barWidth: 2,
+                          isStrokeCapRound: true,
+                          dotData: const FlDotData(show: false),
+                          dashArray: series.isDashed ? [5, 5] : null,
+                        );
+                      }).toList(),
+                      lineTouchData: LineTouchData(
+                      touchTooltipData: LineTouchTooltipData(
+                        fitInsideHorizontally: true,
+                        fitInsideVertically: true,
+                        getTooltipItems: (touchedSpots) {
+                          final items = <LineTooltipItem?>[];
+                          // 첫 번째 포인트에서 날짜/시간 정보 추가
+                          bool dateAdded = false;
+                          for (final spot in touchedSpots) {
+                            final seriesIndex = spot.barIndex;
+                            if (_hiddenSeries.contains(seriesIndex)) {
+                              items.add(null);
+                              continue;
+                            }
+                            final series = widget.series[seriesIndex];
+                            final pointIndex = spot.x.toInt();
+                            if (pointIndex < 0 || pointIndex >= series.dataPoints.length) {
+                              items.add(null);
+                              continue;
+                            }
+                            final point = series.dataPoints[pointIndex];
+
+                            String text;
+                            if (!dateAdded) {
+                              // 첫 번째 항목에 날짜/시간 추가
+                              final dateStr = '${point.time.year}/${point.time.month}/${point.time.day}';
+                              final timeStr = '${point.time.hour.toString().padLeft(2, '0')}:${point.time.minute.toString().padLeft(2, '0')}';
+                              text = '$dateStr $timeStr\n${series.name}: ${point.value.toStringAsFixed(1)}';
+                              dateAdded = true;
+                            } else {
+                              text = '${series.name}: ${point.value.toStringAsFixed(1)}';
+                            }
+
+                            items.add(LineTooltipItem(
+                              text,
+                              TextStyle(
+                                color: series.color ?? theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ));
+                          }
+                          return items;
+                        },
+                      ),
+                    ),
+                  ),
+                  duration: const Duration(milliseconds: 300),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
       ],
     );
   }
