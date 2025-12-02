@@ -88,9 +88,12 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
                 child: Column(
                   children: BuildingType.values.map((type) {
                     final isSelected = analysisProvider.buildingType == type;
+                    // ignore: deprecated_member_use
                     return RadioListTile<BuildingType>(
                       value: type,
+                      // ignore: deprecated_member_use
                       groupValue: analysisProvider.buildingType,
+                      // ignore: deprecated_member_use
                       onChanged: (value) {
                         if (value != null) {
                           analysisProvider.setBuildingType(value);
@@ -289,12 +292,12 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
       endDate: _endDate,
     );
 
+    if (!mounted) return;
+
     if (analysisProvider.error != null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('분석 실패: ${analysisProvider.error}')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('분석 실패: ${analysisProvider.error}')),
+      );
     }
   }
 

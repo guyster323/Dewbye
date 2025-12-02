@@ -398,11 +398,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed == true) {
       await _cacheService.clearAllCache();
       await _loadCacheSize();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('캐시가 삭제되었습니다')),
-        );
-      }
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('캐시가 삭제되었습니다')),
+      );
     }
   }
 

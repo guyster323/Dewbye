@@ -89,7 +89,9 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                     ? null
                     : () async {
                         await locationProvider.getCurrentLocation();
-                        if (mounted && locationProvider.currentLocation != null) {
+                        if (!mounted) return;
+                        
+                        if (locationProvider.currentLocation != null) {
                           final loc = locationProvider.currentLocation!;
                           // 현재 위치 정보를 반환
                           Navigator.pop(context, {

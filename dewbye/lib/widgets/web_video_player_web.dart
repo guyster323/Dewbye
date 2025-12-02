@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 // Web 전용 imports
 import 'dart:ui_web' as ui_web show platformViewRegistry;
+// ignore: avoid_web_libraries_in_flutter
 import 'dart:html' as html;
 
 class WebVideoPlayer extends StatefulWidget {
@@ -31,15 +32,33 @@ class _WebVideoPlayerState extends State<WebVideoPlayer> {
 
   void _initializeVideo() {
     try {
+      // Flutter 웹 빌드에서 assets 경로는 'assets/assets/파일명' 형태로 변환됨
+      // 전달받은 경로가 'assets/Intro.mp4' 형태이면 'assets/assets/Intro.mp4'로 변환
+      String videoSrc = widget.assetPath;
+      if (videoSrc.startsWith('assets/') && !videoSrc.startsWith('assets/assets/')) {
+        videoSrc = 'assets/${widget.assetPath}';
+      }
+      
       _videoElement = html.VideoElement()
-        ..src = widget.assetPath
+        ..src = videoSrc
         ..autoplay = true
         ..loop = true
         ..muted = true
+        ..setAttribute('playsinline', 'true')  // iOS Safari 지원
         ..style.width = '100%'
         ..style.height = '100%'
         ..style.objectFit = 'cover'
         ..style.opacity = widget.opacity.toString();
+
+      // 비디오 로드 이벤트 리스너 추가
+      _videoElement!.onLoadedData.listen((_) {
+        debugPrint('Web 비디오 로드 완료');
+        _videoElement!.play();
+      });
+      
+      _videoElement!.onError.listen((event) {
+        debugPrint('Web 비디오 로드 오류: ${_videoElement!.error?.message}');
+      });
 
       // Platform view 등록
       // ignore: undefined_prefixed_name
@@ -48,7 +67,7 @@ class _WebVideoPlayerState extends State<WebVideoPlayer> {
         (int viewId) => _videoElement!,
       );
 
-      debugPrint('Web 비디오 초기화 완료: ${widget.assetPath}');
+      debugPrint('Web 비디오 초기화 완료: $videoSrc');
     } catch (e) {
       debugPrint('Web 비디오 초기화 오류: $e');
     }

@@ -70,33 +70,50 @@ class _IntroScreenState extends State<IntroScreen> {
 
     try {
       if (kIsWeb) {
-        // Web에서는 브라우저 권한 사용 (자동 승인)
-        _locationPermissionGranted = true;
-        _storagePermissionGranted = true; // Web Storage 자동 사용
-        // Web에서 위치 가져오기 시도 (브라우저가 직접 권한 요청)
+        // Web에서는 브라우저가 직접 권한을 관리함
+        // Web Storage (localStorage, IndexedDB)는 권한 불필요
+        _storagePermissionGranted = true;
+        
+        // Web에서 위치는 브라우저가 직접 권한 요청함
+        // Geolocator를 호출하면 브라우저가 위치 권한 팝업을 띄움
+        _locationPermissionGranted = true; // 일단 허용으로 설정, 실제 사용시 브라우저가 요청
+        
+        // Web에서 위치 가져오기 시도 (브라우저가 직접 권한 요청 팝업 표시)
         try {
           await _getCurrentLocation();
         } catch (e) {
-          debugPrint('Web 위치 가져오기: $e');
-          // 실패해도 계속 진행
+          debugPrint('Web 위치 가져오기 실패 (사용자가 거부했을 수 있음): $e');
+          // 위치 실패해도 앱은 계속 사용 가능
         }
       } else {
         // 모바일: 위치 권한 확인 및 요청
-        var locationStatus = await Permission.location.status;
-        if (!locationStatus.isGranted) {
-          locationStatus = await Permission.location.request();
+        try {
+          var locationStatus = await Permission.location.status;
+          if (!locationStatus.isGranted) {
+            locationStatus = await Permission.location.request();
+          }
+          _locationPermissionGranted = locationStatus.isGranted;
+        } catch (e) {
+          debugPrint('위치 권한 확인 오류: $e');
+          _locationPermissionGranted = false;
         }
-        _locationPermissionGranted = locationStatus.isGranted;
 
         // 저장소 권한 확인 및 요청 (Android 12 이하)
-        if (await Permission.storage.isRestricted == false) {
-          var storageStatus = await Permission.storage.status;
-          if (!storageStatus.isGranted) {
-            storageStatus = await Permission.storage.request();
+        try {
+          final isRestricted = await Permission.storage.isRestricted;
+          if (!isRestricted) {
+            var storageStatus = await Permission.storage.status;
+            if (!storageStatus.isGranted) {
+              storageStatus = await Permission.storage.request();
+            }
+            _storagePermissionGranted = storageStatus.isGranted;
+          } else {
+            _storagePermissionGranted = true; // Android 13+에서는 필요 없음
           }
-          _storagePermissionGranted = storageStatus.isGranted;
-        } else {
-          _storagePermissionGranted = true; // Android 13+에서는 필요 없음
+        } catch (e) {
+          debugPrint('저장소 권한 확인 오류: $e');
+          // 저장소 권한 확인 실패시 기본 허용 (앱 내부 저장소는 권한 불필요)
+          _storagePermissionGranted = true;
         }
 
         // 위치 권한이 있으면 자동으로 현재 위치 가져오기
@@ -112,9 +129,11 @@ class _IntroScreenState extends State<IntroScreen> {
         _storagePermissionGranted = true;
       }
     } finally {
-      setState(() {
-        _checkingPermissions = false;
-      });
+      if (mounted) {
+        setState(() {
+          _checkingPermissions = false;
+        });
+      }
     }
   }
 
@@ -153,7 +172,7 @@ class _IntroScreenState extends State<IntroScreen> {
           final administrativeArea = place.administrativeArea ?? '';
           
           if (locality.isNotEmpty || subLocality.isNotEmpty) {
-            locationName = '${locality} ${subLocality}'.trim();
+            locationName = '$locality $subLocality'.trim();
           } else if (administrativeArea.isNotEmpty) {
             locationName = administrativeArea;
           }
