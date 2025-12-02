@@ -82,6 +82,28 @@ class GeoLocation {
     if (name != null) parts.add(name!);
     return parts.join(' ');
   }
+  
+  /// English display name for PDF reports
+  String get englishDisplayName {
+    final parts = <String>[];
+    if (name != null) parts.add(name!);
+    if (admin2 != null) parts.add(admin2!);
+    if (admin1 != null) parts.add(admin1!);
+    if (country != null) {
+      final englishCountry = switch (country) {
+        '대한민국' || 'South Korea' || 'Korea' => 'South Korea',
+        '일본' => 'Japan',
+        '중국' => 'China',
+        '미국' => 'USA',
+        _ => country,
+      };
+      parts.add(englishCountry!);
+    }
+    if (parts.isEmpty) {
+      return 'Lat: ${latitude.toStringAsFixed(4)}, Lon: ${longitude.toStringAsFixed(4)}';
+    }
+    return parts.join(', ');
+  }
 
   @override
   bool operator ==(Object other) {

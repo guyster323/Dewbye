@@ -87,98 +87,104 @@ class _InteractiveLineChartState extends State<InteractiveLineChart> {
             ),
           ),
         Expanded(
-          child: LineChart(
-            LineChartData(
-              gridData: FlGridData(
-                show: widget.showGrid,
-                drawVerticalLine: false,
-                horizontalInterval: (maxY - minY) / 4,
-                getDrawingHorizontalLine: (value) {
-                  return FlLine(
-                    color: theme.dividerColor.withValues(alpha: 0.5),
-                    strokeWidth: 1,
-                  );
-                },
-              ),
-              titlesData: _buildTitlesData(theme, minY, maxY),
-              borderData: FlBorderData(show: false),
-              minY: minY,
-              maxY: maxY,
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  curveSmoothness: 0.3,
-                  color: lineColor,
-                  barWidth: 3,
-                  isStrokeCapRound: true,
-                  dotData: FlDotData(
-                    show: widget.showDots || _selectedIndex != null,
-                    getDotPainter: (spot, percent, barData, index) {
-                      final isSelected = index == _selectedIndex;
-                      return FlDotCirclePainter(
-                        radius: isSelected ? 8 : 4,
-                        color: isSelected
-                            ? lineColor
-                            : lineColor.withValues(alpha: 0.7),
-                        strokeWidth: isSelected ? 3 : 2,
-                        strokeColor: Colors.white,
-                      );
-                    },
-                  ),
-                  belowBarData: widget.showArea
-                      ? BarAreaData(
-                          show: true,
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              widget.gradientStartColor ??
-                                  lineColor.withValues(alpha: 0.4),
-                              widget.gradientEndColor ??
-                                  lineColor.withValues(alpha: 0.0),
-                            ],
-                          ),
-                        )
-                      : null,
+          child: InteractiveViewer(
+            minScale: 1.0,
+            maxScale: 5.0,
+            panEnabled: true,
+            scaleEnabled: true,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: widget.showGrid,
+                  drawVerticalLine: false,
+                  horizontalInterval: (maxY - minY) / 4,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color: theme.dividerColor.withValues(alpha: 0.5),
+                      strokeWidth: 1,
+                    );
+                  },
                 ),
-              ],
-              extraLinesData: _buildExtraLines(theme),
-              lineTouchData: LineTouchData(
-                enabled: true,
-                touchCallback: (event, response) {
-                  if (event is FlTapUpEvent && response?.lineBarSpots != null) {
-                    final touchedSpot = response!.lineBarSpots!.first;
-                    final index = touchedSpot.x.toInt();
-                    setState(() {
-                      _selectedIndex = index;
-                    });
-                    widget.onPointTap?.call(index, widget.dataPoints[index]);
-                  }
-                },
-                touchTooltipData: LineTouchTooltipData(
-                  fitInsideHorizontally: true,
-                  fitInsideVertically: true,
-                  getTooltipItems: (touchedSpots) {
-                    return touchedSpots.map((spot) {
-                      final point = widget.dataPoints[spot.x.toInt()];
+                titlesData: _buildTitlesData(theme, minY, maxY),
+                borderData: FlBorderData(show: false),
+                minY: minY,
+                maxY: maxY,
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    curveSmoothness: 0.3,
+                    color: lineColor,
+                    barWidth: 3,
+                    isStrokeCapRound: true,
+                    dotData: FlDotData(
+                      show: widget.showDots || _selectedIndex != null,
+                      getDotPainter: (spot, percent, barData, index) {
+                        final isSelected = index == _selectedIndex;
+                        return FlDotCirclePainter(
+                          radius: isSelected ? 8 : 4,
+                          color: isSelected
+                              ? lineColor
+                              : lineColor.withValues(alpha: 0.7),
+                          strokeWidth: isSelected ? 3 : 2,
+                          strokeColor: Colors.white,
+                        );
+                      },
+                    ),
+                    belowBarData: widget.showArea
+                        ? BarAreaData(
+                            show: true,
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                widget.gradientStartColor ??
+                                    lineColor.withValues(alpha: 0.4),
+                                widget.gradientEndColor ??
+                                    lineColor.withValues(alpha: 0.0),
+                              ],
+                            ),
+                          )
+                        : null,
+                  ),
+                ],
+                extraLinesData: _buildExtraLines(theme),
+                lineTouchData: LineTouchData(
+                  enabled: true,
+                  touchCallback: (event, response) {
+                    if (event is FlTapUpEvent && response?.lineBarSpots != null) {
+                      final touchedSpot = response!.lineBarSpots!.first;
+                      final index = touchedSpot.x.toInt();
+                      setState(() {
+                        _selectedIndex = index;
+                      });
+                      widget.onPointTap?.call(index, widget.dataPoints[index]);
+                    }
+                  },
+                  touchTooltipData: LineTouchTooltipData(
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots.map((spot) {
+                        final point = widget.dataPoints[spot.x.toInt()];
                       final yLabel = widget.yLabelFormatter?.call(point.value) ??
                           point.value.toStringAsFixed(1);
                       final xLabel = widget.xLabelFormatter?.call(point.time) ??
                           '${point.time.hour}:00';
-                      return LineTooltipItem(
-                        '$xLabel\n$yLabel',
-                        TextStyle(
-                          color: theme.colorScheme.onSurface,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      );
-                    }).toList();
-                  },
+                        return LineTooltipItem(
+                          '$xLabel\n$yLabel',
+                          TextStyle(
+                            color: theme.colorScheme.onSurface,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      }).toList();
+                    },
+                  ),
                 ),
               ),
+              duration: const Duration(milliseconds: 300),
             ),
-            duration: const Duration(milliseconds: 300),
           ),
         ),
         if (_selectedIndex != null)
@@ -439,72 +445,78 @@ class _MultiLineChartState extends State<MultiLineChart> {
             child: _buildLegend(theme),
           ),
         Expanded(
-          child: LineChart(
-            LineChartData(
-              gridData: FlGridData(
-                show: widget.showGrid,
-                drawVerticalLine: false,
-                horizontalInterval: (maxY - minY) / 4,
-                getDrawingHorizontalLine: (value) {
-                  return FlLine(
-                    color: theme.dividerColor.withValues(alpha: 0.5),
-                    strokeWidth: 1,
-                  );
-                },
-              ),
-              titlesData: _buildTitlesData(theme, minY, maxY),
-              borderData: FlBorderData(show: false),
-              minY: minY,
-              maxY: maxY,
-              lineBarsData: widget.series.asMap().entries.map((entry) {
-                final index = entry.key;
-                final series = entry.value;
-                final isHidden = _hiddenSeries.contains(index);
-
-                final spots = series.dataPoints.asMap().entries.map((e) {
-                  return FlSpot(e.key.toDouble(), e.value.value);
-                }).toList();
-
-                return LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  curveSmoothness: 0.3,
-                  color: isHidden
-                      ? Colors.transparent
-                      : series.color ?? theme.colorScheme.primary,
-                  barWidth: 2,
-                  isStrokeCapRound: true,
-                  dotData: const FlDotData(show: false),
-                  dashArray: series.isDashed ? [5, 5] : null,
-                );
-              }).toList(),
-              lineTouchData: LineTouchData(
-                touchTooltipData: LineTouchTooltipData(
-                  fitInsideHorizontally: true,
-                  fitInsideVertically: true,
-                  getTooltipItems: (touchedSpots) {
-                    return touchedSpots.map((spot) {
-                      final seriesIndex = spot.barIndex;
-                      if (_hiddenSeries.contains(seriesIndex)) {
-                        return null;
-                      }
-                      final series = widget.series[seriesIndex];
-                      final pointIndex = spot.x.toInt();
-                      if (pointIndex >= series.dataPoints.length) return null;
-                      final point = series.dataPoints[pointIndex];
-                      return LineTooltipItem(
-                        '${series.name}: ${point.value.toStringAsFixed(1)}',
-                        TextStyle(
-                          color: series.color ?? theme.colorScheme.primary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      );
-                    }).toList();
+          child: InteractiveViewer(
+            minScale: 1.0,
+            maxScale: 5.0,
+            panEnabled: true,
+            scaleEnabled: true,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: widget.showGrid,
+                  drawVerticalLine: false,
+                  horizontalInterval: (maxY - minY) / 4,
+                  getDrawingHorizontalLine: (value) {
+                    return FlLine(
+                      color: theme.dividerColor.withValues(alpha: 0.5),
+                      strokeWidth: 1,
+                    );
                   },
                 ),
+                titlesData: _buildTitlesData(theme, minY, maxY),
+                borderData: FlBorderData(show: false),
+                minY: minY,
+                maxY: maxY,
+                lineBarsData: widget.series.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final series = entry.value;
+                  final isHidden = _hiddenSeries.contains(index);
+
+                  final spots = series.dataPoints.asMap().entries.map((e) {
+                    return FlSpot(e.key.toDouble(), e.value.value);
+                  }).toList();
+
+                  return LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    curveSmoothness: 0.3,
+                    color: isHidden
+                        ? Colors.transparent
+                        : series.color ?? theme.colorScheme.primary,
+                    barWidth: 2,
+                    isStrokeCapRound: true,
+                    dotData: const FlDotData(show: false),
+                    dashArray: series.isDashed ? [5, 5] : null,
+                  );
+                }).toList(),
+                lineTouchData: LineTouchData(
+                  touchTooltipData: LineTouchTooltipData(
+                    fitInsideHorizontally: true,
+                    fitInsideVertically: true,
+                    getTooltipItems: (touchedSpots) {
+                      return touchedSpots.map((spot) {
+                        final seriesIndex = spot.barIndex;
+                        if (_hiddenSeries.contains(seriesIndex)) {
+                          return null;
+                        }
+                        final series = widget.series[seriesIndex];
+                        final pointIndex = spot.x.toInt();
+                        if (pointIndex >= series.dataPoints.length) return null;
+                        final point = series.dataPoints[pointIndex];
+                        return LineTooltipItem(
+                          '${series.name}: ${point.value.toStringAsFixed(1)}',
+                          TextStyle(
+                            color: series.color ?? theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        );
+                      }).toList();
+                    },
+                  ),
+                ),
               ),
+              duration: const Duration(milliseconds: 300),
             ),
-            duration: const Duration(milliseconds: 300),
           ),
         ),
       ],
