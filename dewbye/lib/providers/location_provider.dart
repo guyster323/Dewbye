@@ -84,7 +84,9 @@ class LocationProvider extends ChangeNotifier {
 
   /// 위치 검색
   Future<void> searchLocation(String query) async {
-    if (query.trim().isEmpty) {
+    // 공백 제거 후 빈 문자열 체크
+    final trimmedQuery = query.trim();
+    if (trimmedQuery.isEmpty) {
       _searchResults = [];
       notifyListeners();
       return;
@@ -95,7 +97,8 @@ class LocationProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _searchResults = await _locationService.searchLocations(query);
+      // 검색어에서 불필요한 공백 제거하고 검색
+      _searchResults = await _locationService.searchLocations(trimmedQuery);
     } catch (e) {
       _error = e.toString();
       _searchResults = [];

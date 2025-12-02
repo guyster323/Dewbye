@@ -233,64 +233,80 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 12),
           ...displayResults.map((result) {
             final riskColor = AppTheme.getRiskColor(result.riskScore);
-            return GlassmorphismContainer(
+            return Card(
               margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: riskColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Center(
-                      child: Text(
-                        result.riskScore.toStringAsFixed(0),
-                        style: TextStyle(
-                          color: riskColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
+              child: ExpansionTile(
+                leading: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: riskColor.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Center(
+                    child: Text(
+                      result.riskScore.toStringAsFixed(0),
+                      style: TextStyle(
+                        color: riskColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
+                ),
+                title: Text(
+                  '${result.date.month}/${result.date.day} ${result.date.hour}:00',
+                  style: theme.textTheme.titleSmall,
+                ),
+                subtitle: Text(
+                  result.riskLevel.label,
+                  style: TextStyle(color: riskColor),
+                ),
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        _buildDetailRow(theme, '외기 온도', '${result.outdoorTemp.toStringAsFixed(1)}°C'),
+                        _buildDetailRow(theme, '외기 습도', '${result.outdoorHumidity.toStringAsFixed(1)}%'),
+                        _buildDetailRow(theme, '이슬점', '${result.dewPoint.toStringAsFixed(1)}°C'),
+                        _buildDetailRow(theme, '실내 온도', '${result.indoorTemp.toStringAsFixed(1)}°C'),
+                        _buildDetailRow(theme, '실내 습도', '${result.indoorHumidity.toStringAsFixed(1)}%'),
+                        const Divider(),
                         Text(
-                          '${result.date.month}/${result.date.day} ${result.date.hour}:00',
-                          style: theme.textTheme.titleSmall,
-                        ),
-                        Text(
-                          '외기 ${result.outdoorTemp.toStringAsFixed(1)}°C / ${result.outdoorHumidity.toStringAsFixed(0)}%',
-                          style: theme.textTheme.bodySmall,
+                          result.recommendation,
+                          style: theme.textTheme.bodyMedium,
                         ),
                       ],
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: riskColor.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      result.riskLevel.label,
-                      style: TextStyle(
-                        color: riskColor,
-                        fontWeight: FontWeight.w500,
-                        fontSize: 12,
-                      ),
                     ),
                   ),
                 ],
               ),
             );
-          }),
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(ThemeData theme, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: theme.textTheme.bodyMedium,
+          ),
         ],
       ),
     );

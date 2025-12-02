@@ -15,6 +15,8 @@ class _GraphScreenState extends State<GraphScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int? _selectedDataIndex;
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -36,6 +38,13 @@ class _GraphScreenState extends State<GraphScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('분석 그래프'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.date_range),
+            onPressed: () => _showDateRangeDialog(context, analysisProvider),
+            tooltip: '기간 선택',
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -149,8 +158,50 @@ class _GraphScreenState extends State<GraphScreen>
     );
   }
 
+  Future<void> _showDateRangeDialog(BuildContext context, AnalysisProvider provider) async {
+    if (provider.results.isEmpty) return;
+
+    final sortedResults = List<AnalysisResult>.from(provider.results)
+      ..sort((a, b) => a.date.compareTo(b.date));
+    
+    final minDate = sortedResults.first.date;
+    final maxDate = sortedResults.last.date;
+
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: minDate,
+      lastDate: maxDate,
+      initialDateRange: _startDate != null && _endDate != null
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && mounted) {
+      setState(() {
+        _startDate = picked.start;
+        _endDate = picked.end;
+      });
+    }
+  }
+
+  List<AnalysisResult> _filterResultsByDateRange(List<AnalysisResult> results) {
+    if (_startDate == null || _endDate == null) return results;
+
+    return results.where((r) {
+      return r.date.isAfter(_startDate!.subtract(const Duration(days: 1))) &&
+             r.date.isBefore(_endDate!.add(const Duration(days: 1)));
+    }).toList();
+  }
+
   Widget _buildRiskChart(ThemeData theme, AnalysisProvider provider) {
-    final results = provider.results.reversed.toList();
+    final allResults = provider.results.reversed.toList();
+    final results = _filterResultsByDateRange(allResults);
     final dataPoints = results.map((r) {
       return ChartDataPoint(
         time: r.date,
@@ -204,7 +255,8 @@ class _GraphScreenState extends State<GraphScreen>
   }
 
   Widget _buildTempHumidityChart(ThemeData theme, AnalysisProvider provider) {
-    final results = provider.results.reversed.toList();
+    final allResults = provider.results.reversed.toList();
+    final results = _filterResultsByDateRange(allResults);
 
     final tempPoints = results.map((r) {
       return ChartDataPoint(
@@ -259,7 +311,8 @@ class _GraphScreenState extends State<GraphScreen>
   }
 
   Widget _buildDewPointChart(ThemeData theme, AnalysisProvider provider) {
-    final results = provider.results.reversed.toList();
+    final allResults = provider.results.reversed.toList();
+    final results = _filterResultsByDateRange(allResults);
 
     final dewPointPoints = results.map((r) {
       return ChartDataPoint(
@@ -316,7 +369,8 @@ class _GraphScreenState extends State<GraphScreen>
   Widget _buildTimeline(ThemeData theme, AnalysisProvider provider) {
     // 주요 이벤트만 필터링 (위험도 50% 이상 또는 급격한 변화)
     final events = <TimelineEvent>[];
-    final results = provider.results;
+    final allResults = provider.results;
+    final results = _filterResultsByDateRange(allResults);
 
     for (int i = 0; i < results.length; i++) {
       final result = results[i];

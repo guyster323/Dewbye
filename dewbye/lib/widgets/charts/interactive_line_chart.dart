@@ -366,6 +366,7 @@ class MultiLineChart extends StatefulWidget {
   final bool showGrid;
   final bool showLegend;
   final String Function(DateTime)? xLabelFormatter;
+  final bool enableZoom;
 
   const MultiLineChart({
     super.key,
@@ -376,6 +377,7 @@ class MultiLineChart extends StatefulWidget {
     this.showGrid = true,
     this.showLegend = true,
     this.xLabelFormatter,
+    this.enableZoom = true,
   });
 
   @override

@@ -28,17 +28,29 @@ class ExportService {
       final fileName = customFileName ??
           'dewbye_analysis_${_fileNameFormat.format(DateTime.now())}.csv';
 
-      // CSV 헤더
+      // CSV 헤더 (산출 로직 안내 포함)
       final headers = [
-        '날짜/시간',
-        '위험도 (%)',
-        '위험 등급',
-        '외기 온도 (°C)',
-        '외기 습도 (%)',
-        '이슬점 (°C)',
-        '실내 온도 (°C)',
-        '실내 습도 (%)',
-        '권장 조치',
+        'Date/Time',
+        'Risk Score (%)',
+        'Risk Level',
+        'Outdoor Temp (C)',
+        'Outdoor Humidity (%)',
+        'Dew Point (C)',
+        'Indoor Temp (C)',
+        'Indoor Humidity (%)',
+        'Recommendation',
+      ];
+      
+      // 산출 로직 안내 행
+      final logicInfo = [
+        '=== RISK CALCULATION LOGIC ===',
+        'Risk Score = Base Risk + Dew Point Risk + Humidity Risk',
+        'Base Risk: Gap < 3C = High',
+        'Dew Point Risk: Based on dew point temp',
+        'Humidity Risk: Indoor/Outdoor difference',
+        '',
+        '',
+        '',
       ];
 
       // CSV 데이터
@@ -54,8 +66,8 @@ class ExportService {
         r.recommendation,
       ]).toList();
 
-      // CSV 생성
-      final csvData = const ListToCsvConverter().convert([headers, ...rows]);
+      // CSV 생성 (로직 설명 + 헤더 + 데이터)
+      final csvData = const ListToCsvConverter().convert([logicInfo, [], headers, ...rows]);
 
       // UTF-8 BOM 추가 (Excel 한글 호환)
       final bom = '\uFEFF';
@@ -166,17 +178,28 @@ class ExportService {
             pw.Header(
               level: 0,
               child: pw.Text(
-                'Dewbye 분석 리포트',
+                'Dewbye Analysis Report',
                 style: pw.TextStyle(
                   fontSize: 24,
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
             ),
+            pw.SizedBox(height: 10),
+            
+            // 위험도 산출 로직 안내
+            _buildPdfSection('Risk Calculation Method', [
+              pw.Text('Risk Score = Base Risk + Dew Point Risk + Humidity Risk'),
+              pw.SizedBox(height: 5),
+              pw.Bullet(text: 'Base Risk: Temperature-Dew Point Gap < 3C = High Risk'),
+              pw.Bullet(text: 'Dew Point Risk: Based on dew point temperature'),
+              pw.Bullet(text: 'Humidity Risk: Indoor/Outdoor humidity difference'),
+              pw.Bullet(text: 'Building Airtightness Factor: ${buildingType.airtightness}'),
+            ]),
             pw.SizedBox(height: 20),
 
             // 기본 정보
-            _buildPdfSection('기본 정보', [
+            _buildPdfSection('Basic Information', [
               _buildPdfInfoRow('위치', locationName),
               _buildPdfInfoRow('건물 유형', buildingType.label),
               _buildPdfInfoRow('분석 기간',

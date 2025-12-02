@@ -48,6 +48,11 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                     : null,
               ),
               onChanged: (query) {
+                // 입력 즉시 검색 (트림 처리는 provider에서)
+                locationProvider.searchLocation(query);
+              },
+              onSubmitted: (query) {
+                // Enter 키 입력 시에도 검색
                 locationProvider.searchLocation(query);
               },
             ),
