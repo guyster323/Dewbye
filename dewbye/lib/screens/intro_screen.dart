@@ -26,7 +26,7 @@ class _IntroScreenState extends State<IntroScreen> {
   bool _checkingPermissions = true;
 
   // 사용자 설정
-  late UserSettings _userSettings;
+  UserSettings _userSettings = UserSettings.defaultSettings;
   final _formKey = GlobalKey<FormState>();
   
   // 위치 정보
@@ -54,19 +54,16 @@ class _IntroScreenState extends State<IntroScreen> {
     try {
       await _cacheService.openBoxes();
       final savedSettings = _cacheService.getUserSettings();
-      if (savedSettings != null) {
+      if (savedSettings != null && mounted) {
         setState(() {
           _userSettings = savedSettings;
           if (savedSettings.locationName != null) {
             _locationDisplay = savedSettings.locationName!;
           }
         });
-      } else {
-        _userSettings = UserSettings.defaultSettings;
       }
     } catch (e) {
       debugPrint('설정 로드 오류: $e');
-      _userSettings = UserSettings.defaultSettings;
     }
   }
 
@@ -92,6 +89,7 @@ class _IntroScreenState extends State<IntroScreen> {
         _videoController = VideoPlayerController.asset('assets/Intro.mp4');
         await _videoController!.initialize();
         _videoController!.setLooping(true);
+        _videoController!.setVolume(0.3); // 30% 볼륨
         _videoController!.play();
         setState(() {
           _isVideoInitialized = true;
@@ -103,93 +101,112 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 
   Future<void> _checkAndRequestPermissions() async {
+    if (!mounted) return;
+
     setState(() {
       _checkingPermissions = true;
     });
 
     try {
-      if (kIsWeb) {
-        // Web에서는 브라우저가 직접 권한을 관리함
-        // Web Storage (localStorage, IndexedDB)는 권한 불필요
-        _storagePermissionGranted = true;
-        
-        // Web에서 위치 권한 상태 확인
-        try {
-          final permission = await Geolocator.checkPermission();
-          if (permission == LocationPermission.denied) {
-            // 권한이 없으면 요청
-            final requested = await Geolocator.requestPermission();
-            _locationPermissionGranted = requested == LocationPermission.whileInUse || 
-                                        requested == LocationPermission.always;
-          } else {
-            _locationPermissionGranted = permission == LocationPermission.whileInUse || 
-                                        permission == LocationPermission.always;
-          }
-        } catch (e) {
-          debugPrint('Web 위치 권한 확인 오류: $e');
-          // 권한 확인 실패 시 일단 허용으로 설정 (실제 사용시 브라우저가 요청)
-          _locationPermissionGranted = true;
-        }
-        
-        // 위치 권한이 있고 저장된 위치가 없을 때만 자동으로 현재 위치 가져오기
-        if (_locationPermissionGranted && 
-            (_userSettings.latitude == null || _userSettings.longitude == null)) {
-          try {
-            await _getCurrentLocation();
-          } catch (e) {
-            debugPrint('Web 위치 가져오기 실패: $e');
-            // 위치 실패해도 앱은 계속 사용 가능 (수동으로 설정 가능)
-          }
-        }
-      } else {
-        // 모바일: 위치 권한 확인 및 요청
-        try {
-          var locationStatus = await Permission.location.status;
-          if (!locationStatus.isGranted) {
-            locationStatus = await Permission.location.request();
-          }
-          _locationPermissionGranted = locationStatus.isGranted;
-        } catch (e) {
-          debugPrint('위치 권한 확인 오류: $e');
-          _locationPermissionGranted = false;
-        }
-
-        // 저장소 권한 확인 및 요청 (Android 12 이하)
-        try {
-          final isRestricted = await Permission.storage.isRestricted;
-          if (!isRestricted) {
-            var storageStatus = await Permission.storage.status;
-            if (!storageStatus.isGranted) {
-              storageStatus = await Permission.storage.request();
-            }
-            _storagePermissionGranted = storageStatus.isGranted;
-          } else {
-            _storagePermissionGranted = true; // Android 13+에서는 필요 없음
-          }
-        } catch (e) {
-          debugPrint('저장소 권한 확인 오류: $e');
-          // 저장소 권한 확인 실패시 기본 허용 (앱 내부 저장소는 권한 불필요)
-          _storagePermissionGranted = true;
-        }
-
-        // 위치 권한이 있고 저장된 위치가 없을 때만 자동으로 현재 위치 가져오기
-        if (_locationPermissionGranted && 
-            (_userSettings.latitude == null || _userSettings.longitude == null)) {
-          await _getCurrentLocation();
-        }
-      }
+      // 타임아웃을 설정하여 권한 확인이 무한 로딩되지 않도록 함
+      await Future.any([
+        _doCheckPermissions(),
+        Future.delayed(const Duration(seconds: 10), () {
+          debugPrint('권한 확인 타임아웃');
+        }),
+      ]);
     } catch (e) {
       debugPrint('권한 확인 오류: $e');
-      if (kIsWeb) {
-        // Web에서는 권한 오류가 있어도 계속 진행
-        _locationPermissionGranted = true;
-        _storagePermissionGranted = true;
-      }
     } finally {
+      // 항상 로딩 상태 해제 및 기본값 설정
       if (mounted) {
         setState(() {
           _checkingPermissions = false;
+          // 권한 확인이 완료되지 않은 경우 기본값으로 설정
+          if (!_locationPermissionGranted && !_storagePermissionGranted) {
+            _locationPermissionGranted = true;
+            _storagePermissionGranted = true;
+          }
         });
+      }
+    }
+  }
+
+  Future<void> _doCheckPermissions() async {
+    if (kIsWeb) {
+      // Web에서는 브라우저가 직접 권한을 관리함
+      _storagePermissionGranted = true;
+
+      // Web에서 위치 권한 상태 확인
+      try {
+        final permission = await Geolocator.checkPermission()
+            .timeout(const Duration(seconds: 5));
+        if (permission == LocationPermission.denied) {
+          final requested = await Geolocator.requestPermission()
+              .timeout(const Duration(seconds: 5));
+          _locationPermissionGranted = requested == LocationPermission.whileInUse ||
+              requested == LocationPermission.always;
+        } else {
+          _locationPermissionGranted = permission == LocationPermission.whileInUse ||
+              permission == LocationPermission.always;
+        }
+      } catch (e) {
+        debugPrint('Web 위치 권한 확인 오류: $e');
+        _locationPermissionGranted = true;
+      }
+
+      // 위치 권한이 있고 저장된 위치가 없을 때만 자동으로 현재 위치 가져오기
+      if (_locationPermissionGranted &&
+          (_userSettings.latitude == null || _userSettings.longitude == null)) {
+        try {
+          await _getCurrentLocation();
+        } catch (e) {
+          debugPrint('Web 위치 가져오기 실패: $e');
+        }
+      }
+    } else {
+      // 모바일: 위치 권한 확인 및 요청
+      try {
+        var locationStatus = await Permission.location.status
+            .timeout(const Duration(seconds: 5));
+        if (!locationStatus.isGranted) {
+          locationStatus = await Permission.location.request()
+              .timeout(const Duration(seconds: 5));
+        }
+        _locationPermissionGranted = locationStatus.isGranted;
+      } catch (e) {
+        debugPrint('위치 권한 확인 오류: $e');
+        _locationPermissionGranted = true; // 오류 시 기본 허용
+      }
+
+      // 저장소 권한 확인 (Android 13+에서는 필요 없음)
+      try {
+        final isRestricted = await Permission.storage.isRestricted
+            .timeout(const Duration(seconds: 3));
+        if (!isRestricted) {
+          var storageStatus = await Permission.storage.status
+              .timeout(const Duration(seconds: 3));
+          if (!storageStatus.isGranted) {
+            storageStatus = await Permission.storage.request()
+                .timeout(const Duration(seconds: 3));
+          }
+          _storagePermissionGranted = storageStatus.isGranted;
+        } else {
+          _storagePermissionGranted = true;
+        }
+      } catch (e) {
+        debugPrint('저장소 권한 확인 오류: $e');
+        _storagePermissionGranted = true;
+      }
+
+      // 위치 권한이 있고 저장된 위치가 없을 때만 자동으로 현재 위치 가져오기
+      if (_locationPermissionGranted &&
+          (_userSettings.latitude == null || _userSettings.longitude == null)) {
+        try {
+          await _getCurrentLocation();
+        } catch (e) {
+          debugPrint('위치 가져오기 실패: $e');
+        }
       }
     }
   }
@@ -630,39 +647,54 @@ class _IntroScreenState extends State<IntroScreen> {
                   showModalBottomSheet(
                     context: context,
                     backgroundColor: Colors.transparent,
-                    builder: (context) => Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey[900],
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(20),
+                    useSafeArea: true,
+                    builder: (context) => SafeArea(
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[900],
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(20),
+                          ),
                         ),
-                      ),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ListTile(
-                            leading: const Icon(Icons.my_location, color: Colors.white),
-                            title: const Text(
-                              '현재 위치 사용',
-                              style: TextStyle(color: Colors.white),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // 드래그 핸들
+                            Container(
+                              margin: const EdgeInsets.symmetric(vertical: 12),
+                              width: 40,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[600],
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
-                            onTap: () {
-                              Navigator.pop(context);
-                              _getCurrentLocation();
-                            },
-                          ),
-                          ListTile(
-                            leading: const Icon(Icons.search, color: Colors.white),
-                            title: const Text(
-                              '위치 검색',
-                              style: TextStyle(color: Colors.white),
+                            ListTile(
+                              leading: const Icon(Icons.my_location, color: Colors.white),
+                              title: const Text(
+                                '현재 위치 사용',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                              onTap: () {
+                                Navigator.pop(context);
+                                _getCurrentLocation();
+                              },
                             ),
-                            onTap: () {
-                              Navigator.pop(context);
-                              _selectLocation();
-                            },
-                          ),
-                        ],
+                            ListTile(
+                              leading: const Icon(Icons.search, color: Colors.white),
+                              title: const Text(
+                                '위치 검색',
+                                style: TextStyle(color: Colors.white),
+                              ),
+                              onTap: () {
+                                Navigator.pop(context);
+                                _selectLocation();
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                          ],
+                        ),
                       ),
                     ),
                   );

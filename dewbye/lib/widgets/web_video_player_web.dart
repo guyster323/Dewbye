@@ -43,7 +43,8 @@ class _WebVideoPlayerState extends State<WebVideoPlayer> {
         ..src = videoSrc
         ..autoplay = true
         ..loop = true
-        ..muted = true
+        ..muted = false  // 소리 재생 활성화
+        ..volume = 0.3   // 30% 볼륨
         ..setAttribute('playsinline', 'true')  // iOS Safari 지원
         ..style.width = '100%'
         ..style.height = '100%'
@@ -53,7 +54,13 @@ class _WebVideoPlayerState extends State<WebVideoPlayer> {
       // 비디오 로드 이벤트 리스너 추가
       _videoElement!.onLoadedData.listen((_) {
         debugPrint('Web 비디오 로드 완료');
-        _videoElement!.play();
+        _videoElement!.volume = 0.3;  // 볼륨 재확인
+        _videoElement!.play().catchError((e) {
+          // 자동재생이 차단된 경우 음소거 후 재생
+          debugPrint('자동재생 차단, 음소거 후 재생: $e');
+          _videoElement!.muted = true;
+          _videoElement!.play();
+        });
       });
       
       _videoElement!.onError.listen((event) {
