@@ -15,6 +15,8 @@ class AnalysisScreen extends StatefulWidget {
 class _AnalysisScreenState extends State<AnalysisScreen> {
   DateTime _startDate = DateTime.now().subtract(const Duration(days: 7));
   DateTime _endDate = DateTime.now();
+  int _displayLimit = 10; // 표시할 결과 수
+  RiskLevel? _filterLevel; // 필터링할 위험 레벨
 
   @override
   Widget build(BuildContext context) {
@@ -298,10 +300,15 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
 
   Widget _buildAnalysisResults(ThemeData theme, AnalysisProvider provider) {
     // 요약 통계
-    final results = provider.results;
-    final avgRisk = results.map((r) => r.riskScore).reduce((a, b) => a + b) / results.length;
-    final maxRisk = results.map((r) => r.riskScore).reduce((a, b) => a > b ? a : b);
-    final highRiskCount = results.where((r) => r.riskScore >= 50).length;
+    final allResults = provider.results;
+    final avgRisk = allResults.map((r) => r.riskScore).reduce((a, b) => a + b) / allResults.length;
+    final maxRisk = allResults.map((r) => r.riskScore).reduce((a, b) => a > b ? a : b);
+    final highRiskCount = allResults.where((r) => r.riskScore >= 50).length;
+
+    // 필터링된 결과
+    final filteredResults = _filterLevel == null
+        ? allResults
+        : allResults.where((r) => r.riskLevel == _filterLevel).toList();
 
     return Column(
       children: [
@@ -338,8 +345,33 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         ),
         const SizedBox(height: 16),
 
+        // 카테고리 필터
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Row(
+              children: [
+                _buildFilterChip(theme, '전체', null, filteredResults.length),
+                const SizedBox(width: 8),
+                _buildFilterChip(theme, '위험', RiskLevel.danger, 
+                  allResults.where((r) => r.riskLevel == RiskLevel.danger).length),
+                const SizedBox(width: 8),
+                _buildFilterChip(theme, '경고', RiskLevel.warning, 
+                  allResults.where((r) => r.riskLevel == RiskLevel.warning).length),
+                const SizedBox(width: 8),
+                _buildFilterChip(theme, '주의', RiskLevel.caution, 
+                  allResults.where((r) => r.riskLevel == RiskLevel.caution).length),
+                const SizedBox(width: 8),
+                _buildFilterChip(theme, '안전', RiskLevel.safe, 
+                  allResults.where((r) => r.riskLevel == RiskLevel.safe).length),
+              ],
+            ),
+          ),
+        ),
+
         // 상세 결과 리스트
-        ...results.take(10).map((result) {
+        ...filteredResults.take(_displayLimit).map((result) {
           final riskColor = AppTheme.getRiskColor(result.riskScore);
           return Card(
             margin: const EdgeInsets.only(bottom: 8),
@@ -389,15 +421,59 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
           );
         }),
 
-        // 더보기
-        if (results.length > 10)
-          TextButton(
+        // 더보기 버튼
+        if (filteredResults.length > _displayLimit)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _displayLimit += 10;
+                });
+              },
+              icon: const Icon(Icons.expand_more),
+              label: Text('${filteredResults.length - _displayLimit}개 더 보기'),
+            ),
+          ),
+        
+        // 접기 버튼 (10개 이상 표시 중일 때)
+        if (_displayLimit > 10)
+          TextButton.icon(
             onPressed: () {
-              // 전체 결과 보기 (향후 구현 예정)
+              setState(() {
+                _displayLimit = 10;
+              });
             },
-            child: Text('${results.length - 10}개 더 보기'),
+            icon: const Icon(Icons.expand_less),
+            label: const Text('접기'),
           ),
       ],
+    );
+  }
+
+  Widget _buildFilterChip(ThemeData theme, String label, RiskLevel? level, int count) {
+    final isSelected = _filterLevel == level;
+    final color = level != null 
+        ? AppTheme.getRiskColor(level == RiskLevel.danger ? 85.0 :
+                                level == RiskLevel.warning ? 60.0 :
+                                level == RiskLevel.caution ? 35.0 : 10.0)
+        : theme.colorScheme.primary;
+
+    return FilterChip(
+      label: Text('$label ($count)'),
+      selected: isSelected,
+      onSelected: (selected) {
+        setState(() {
+          _filterLevel = selected ? level : null;
+          _displayLimit = 10; // 필터 변경 시 표시 개수 리셋
+        });
+      },
+      backgroundColor: color.withValues(alpha: 0.1),
+      selectedColor: color.withValues(alpha: 0.3),
+      labelStyle: TextStyle(
+        color: isSelected ? color : theme.colorScheme.onSurface,
+        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+      ),
     );
   }
 }

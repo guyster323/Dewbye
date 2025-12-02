@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../config/theme.dart';
+import '../config/constants.dart';
 import '../providers/location_provider.dart';
 import '../providers/analysis_provider.dart';
 import '../widgets/widgets.dart';
@@ -198,17 +199,39 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
+    // 위험한 결과만 필터링
+    final dangerousResults = analysisProvider.results
+        .where((r) => r.riskLevel == RiskLevel.danger)
+        .toList();
+
+    // 위험한 결과가 없으면 모든 결과 표시
+    final displayResults = dangerousResults.isEmpty 
+        ? analysisProvider.results.take(5).toList()
+        : dangerousResults.take(5).toList();
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '최근 분석 결과',
-            style: theme.textTheme.titleLarge,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                dangerousResults.isEmpty ? '최근 분석 결과' : '위험 경보 (${dangerousResults.length}건)',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: dangerousResults.isEmpty ? null : Colors.red,
+                ),
+              ),
+              if (analysisProvider.results.length > 5)
+                TextButton(
+                  onPressed: () => Navigator.pushNamed(context, '/analysis'),
+                  child: const Text('전체보기'),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
-          ...analysisProvider.results.take(5).map((result) {
+          ...displayResults.map((result) {
             final riskColor = AppTheme.getRiskColor(result.riskScore);
             return GlassmorphismContainer(
               margin: const EdgeInsets.only(bottom: 8),

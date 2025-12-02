@@ -5,8 +5,12 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import '../providers/analysis_provider.dart';
 import '../config/constants.dart';
+// Web 전용 imports
+import 'dart:html' as html;
+import 'dart:convert';
 
 /// 데이터 내보내기 서비스
 class ExportService {
@@ -21,10 +25,8 @@ class ExportService {
     if (results.isEmpty) return null;
 
     try {
-      final directory = await getApplicationDocumentsDirectory();
       final fileName = customFileName ??
           'dewbye_analysis_${_fileNameFormat.format(DateTime.now())}.csv';
-      final file = File('${directory.path}/$fileName');
 
       // CSV 헤더
       final headers = [
@@ -57,9 +59,19 @@ class ExportService {
 
       // UTF-8 BOM 추가 (Excel 한글 호환)
       final bom = '\uFEFF';
-      await file.writeAsString(bom + csvData);
+      final content = bom + csvData;
 
-      return file;
+      if (kIsWeb) {
+        // Web: 브라우저 다운로드
+        _downloadFileWeb(content, fileName, 'text/csv');
+        return null; // Web에서는 File 객체 반환 불가
+      } else {
+        // Mobile: 파일 저장
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/$fileName');
+        await file.writeAsString(content);
+        return file;
+      }
     } catch (e) {
       return null;
     }
@@ -73,10 +85,8 @@ class ExportService {
     if (summaries.isEmpty) return null;
 
     try {
-      final directory = await getApplicationDocumentsDirectory();
       final fileName = customFileName ??
           'dewbye_daily_summary_${_fileNameFormat.format(DateTime.now())}.csv';
-      final file = File('${directory.path}/$fileName');
 
       final headers = [
         '날짜',
@@ -102,9 +112,19 @@ class ExportService {
 
       final csvData = const ListToCsvConverter().convert([headers, ...rows]);
       final bom = '\uFEFF';
-      await file.writeAsString(bom + csvData);
+      final content = bom + csvData;
 
-      return file;
+      if (kIsWeb) {
+        // Web: 브라우저 다운로드
+        _downloadFileWeb(content, fileName, 'text/csv');
+        return null;
+      } else {
+        // Mobile: 파일 저장
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/$fileName');
+        await file.writeAsString(content);
+        return file;
+      }
     } catch (e) {
       return null;
     }
@@ -120,10 +140,8 @@ class ExportService {
     if (results.isEmpty) return null;
 
     try {
-      final directory = await getApplicationDocumentsDirectory();
       final fileName = customFileName ??
           'dewbye_report_${_fileNameFormat.format(DateTime.now())}.pdf';
-      final file = File('${directory.path}/$fileName');
 
       final pdf = pw.Document();
 
@@ -234,9 +252,18 @@ class ExportService {
       );
 
       final bytes = await pdf.save();
-      await file.writeAsBytes(bytes);
 
-      return file;
+      if (kIsWeb) {
+        // Web: 브라우저 다운로드
+        _downloadBinaryFileWeb(bytes, fileName, 'application/pdf');
+        return null;
+      } else {
+        // Mobile: 파일 저장
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/$fileName');
+        await file.writeAsBytes(bytes);
+        return file;
+      }
     } catch (e) {
       return null;
     }
@@ -293,7 +320,14 @@ class ExportService {
   }
 
   /// 파일 공유
-  static Future<void> shareFile(File file) async {
+  static Future<void> shareFile(File? file) async {
+    if (kIsWeb) {
+      // Web에서는 이미 다운로드 완료
+      return;
+    }
+    
+    if (file == null) return;
+    
     await Share.shareXFiles(
       [XFile(file.path)],
       subject: 'Dewbye 분석 데이터',
@@ -302,9 +336,39 @@ class ExportService {
 
   /// 여러 파일 공유
   static Future<void> shareFiles(List<File> files) async {
+    if (kIsWeb) {
+      // Web에서는 이미 다운로드 완료
+      return;
+    }
+    
     await Share.shareXFiles(
       files.map((f) => XFile(f.path)).toList(),
       subject: 'Dewbye 분석 데이터',
     );
+  }
+
+  /// Web에서 파일 다운로드
+  static void _downloadFileWeb(String content, String fileName, String mimeType) {
+    if (!kIsWeb) return;
+    
+    final bytes = utf8.encode(content);
+    final blob = html.Blob([bytes], mimeType);
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute('download', fileName)
+      ..click();
+    html.Url.revokeObjectUrl(url);
+  }
+
+  /// Web에서 바이너리 파일 다운로드 (PDF용)
+  static void _downloadBinaryFileWeb(List<int> bytes, String fileName, String mimeType) {
+    if (!kIsWeb) return;
+    
+    final blob = html.Blob([bytes], mimeType);
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute('download', fileName)
+      ..click();
+    html.Url.revokeObjectUrl(url);
   }
 }
