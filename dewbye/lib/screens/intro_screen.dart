@@ -130,9 +130,11 @@ class _IntroScreenState extends State<IntroScreen> {
       });
     } catch (e) {
       debugPrint('위치 가져오기 오류: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('위치를 가져올 수 없습니다: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('위치를 가져올 수 없습니다: $e')),
+        );
+      }
     } finally {
       setState(() {
         _isLoadingLocation = false;
@@ -209,8 +211,8 @@ class _IntroScreenState extends State<IntroScreen> {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.3),
-                    Colors.black.withOpacity(0.5),
+                    Colors.black.withValues(alpha: 0.3),
+                    Colors.black.withValues(alpha: 0.5),
                   ],
                 ),
               ),
@@ -337,8 +339,8 @@ class _IntroScreenState extends State<IntroScreen> {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: granted
-              ? Colors.green.withOpacity(0.2)
-              : Colors.red.withOpacity(0.2),
+              ? Colors.green.withValues(alpha: 0.2)
+              : Colors.red.withValues(alpha: 0.2),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
             color: granted ? Colors.green : Colors.red,
@@ -462,10 +464,10 @@ class _IntroScreenState extends State<IntroScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
+                    color: Colors.white.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withValues(alpha: 0.3),
                     ),
                   ),
                   child: Row(
@@ -509,17 +511,17 @@ class _IntroScreenState extends State<IntroScreen> {
                 initialValue: _userSettings.buildingType,
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.1),
+                  fillColor: Colors.white.withValues(alpha: 0.1),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withValues(alpha: 0.3),
                     ),
                   ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
-                      color: Colors.white.withOpacity(0.3),
+                      color: Colors.white.withValues(alpha: 0.3),
                     ),
                   ),
                 ),
@@ -563,7 +565,7 @@ class _IntroScreenState extends State<IntroScreen> {
                       divisions: 40,
                       label: '${_userSettings.indoorTemperature.toStringAsFixed(1)}°C',
                       activeColor: Colors.blue,
-                      inactiveColor: Colors.blue.withOpacity(0.3),
+                      inactiveColor: Colors.blue.withValues(alpha: 0.3),
                       onChanged: (value) {
                         setState(() {
                           _userSettings = _userSettings.copyWith(
@@ -577,7 +579,7 @@ class _IntroScreenState extends State<IntroScreen> {
                     width: 70,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
+                      color: Colors.white.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -613,7 +615,7 @@ class _IntroScreenState extends State<IntroScreen> {
                       divisions: 60,
                       label: '${_userSettings.indoorHumidity.toStringAsFixed(1)}%',
                       activeColor: Colors.cyan,
-                      inactiveColor: Colors.cyan.withOpacity(0.3),
+                      inactiveColor: Colors.cyan.withValues(alpha: 0.3),
                       onChanged: (value) {
                         setState(() {
                           _userSettings = _userSettings.copyWith(
@@ -627,7 +629,7 @@ class _IntroScreenState extends State<IntroScreen> {
                     width: 70,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
+                      color: Colors.white.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(

@@ -243,7 +243,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: const Text('이용 약관'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
-                  // TODO: 이용 약관 페이지
+                  // 이용 약관 페이지 (향후 구현 예정)
                 },
               ),
               ListTile(
@@ -251,7 +251,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 title: const Text('개인정보 처리방침'),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
-                  // TODO: 개인정보 처리방침 페이지
+                  // 개인정보 처리방침 페이지 (향후 구현 예정)
                 },
               ),
               ListTile(

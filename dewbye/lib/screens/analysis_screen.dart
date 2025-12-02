@@ -393,7 +393,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
         if (results.length > 10)
           TextButton(
             onPressed: () {
-              // TODO: 전체 결과 보기
+              // 전체 결과 보기 (향후 구현 예정)
             },
             child: Text('${results.length - 10}개 더 보기'),
           ),

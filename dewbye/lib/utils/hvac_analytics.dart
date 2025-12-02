@@ -482,16 +482,26 @@ class BuildingHumidityResponse {
 
     // 1. 이슬점 접근도 (50%)
     final gap = indoorTemp - dewPoint;
-    if (gap <= 0) score += 50;
-    else if (gap < 1.0) score += 40;
-    else if (gap < 2.0) score += 30;
-    else if (gap < 3.0) score += 20;
-    else if (gap < 5.0) score += 10;
+    if (gap <= 0) {
+      score += 50;
+    } else if (gap < 1.0) {
+      score += 40;
+    } else if (gap < 2.0) {
+      score += 30;
+    } else if (gap < 3.0) {
+      score += 20;
+    } else if (gap < 5.0) {
+      score += 10;
+    }
 
     // 2. 실내 습도 (25%)
-    if (indoorRH >= 80) score += 25;
-    else if (indoorRH >= 70) score += 20;
-    else if (indoorRH >= 60) score += 10;
+    if (indoorRH >= 80) {
+      score += 25;
+    } else if (indoorRH >= 70) {
+      score += 20;
+    } else if (indoorRH >= 60) {
+      score += 10;
+    }
 
     // 3. 기밀도 보정 (25%)
     final airtightBonus = buildingType.airtightness * 25;
