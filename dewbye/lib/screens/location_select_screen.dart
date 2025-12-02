@@ -85,7 +85,13 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                     : () async {
                         await locationProvider.getCurrentLocation();
                         if (mounted && locationProvider.currentLocation != null) {
-                          Navigator.pop(context);
+                          final loc = locationProvider.currentLocation!;
+                          // 현재 위치 정보를 반환
+                          Navigator.pop(context, {
+                            'latitude': loc.latitude,
+                            'longitude': loc.longitude,
+                            'name': loc.displayName,
+                          });
                         }
                       },
               ),
@@ -164,7 +170,12 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
             ),
             onTap: () {
               locationProvider.selectLocation(result);
-              Navigator.pop(context);
+              // 선택한 위치 정보를 반환
+              Navigator.pop(context, {
+                'latitude': result.latitude,
+                'longitude': result.longitude,
+                'name': result.displayName,
+              });
             },
           ),
         );
@@ -258,7 +269,12 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                   ),
                   onTap: () {
                     locationProvider.selectLocation(saved.location);
-                    Navigator.pop(context);
+                    // 선택한 위치 정보를 반환
+                    Navigator.pop(context, {
+                      'latitude': saved.location.latitude,
+                      'longitude': saved.location.longitude,
+                      'name': saved.displayName,
+                    });
                   },
                 ),
               );

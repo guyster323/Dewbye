@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../models/user_settings.dart';
 import '../widgets/glassmorphism_container.dart';
+import '../widgets/web_video_player.dart';
 
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key});
@@ -35,23 +36,30 @@ class _IntroScreenState extends State<IntroScreen> {
   void initState() {
     super.initState();
     _userSettings = UserSettings.defaultSettings;
-    // 모든 플랫폼에서 비디오 초기화
+    // 플랫폼에 따라 비디오 초기화
     _initializeVideo();
     _checkAndRequestPermissions();
   }
 
   Future<void> _initializeVideo() async {
-    try {
-      _videoController = VideoPlayerController.asset('assets/Intro.mp4');
-      await _videoController!.initialize();
-      _videoController!.setLooping(true); // 무한 반복 설정
-      _videoController!.play();
+    if (kIsWeb) {
+      // Web: WebVideoPlayer 위젯 사용 (별도 위젯에서 처리)
       setState(() {
         _isVideoInitialized = true;
       });
-    } catch (e) {
-      debugPrint('비디오 초기화 오류: $e');
-      // Web에서 비디오 로딩 실패해도 계속 진행
+    } else {
+      // Mobile: video_player 사용
+      try {
+        _videoController = VideoPlayerController.asset('assets/Intro.mp4');
+        await _videoController!.initialize();
+        _videoController!.setLooping(true);
+        _videoController!.play();
+        setState(() {
+          _isVideoInitialized = true;
+        });
+      } catch (e) {
+        debugPrint('모바일 비디오 초기화 오류: $e');
+      }
     }
   }
 
@@ -234,19 +242,26 @@ class _IntroScreenState extends State<IntroScreen> {
       body: Stack(
         children: [
           // 배경 비디오 (투명도 60%, 무한 반복)
-          if (_isVideoInitialized && _videoController != null)
+          if (_isVideoInitialized)
             Positioned.fill(
-              child: Opacity(
-                opacity: 0.6,
-                child: FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: _videoController!.value.size.width,
-                    height: _videoController!.value.size.height,
-                    child: VideoPlayer(_videoController!),
-                  ),
-                ),
-              ),
+              child: kIsWeb
+                  ? const WebVideoPlayer(
+                      assetPath: 'assets/Intro.mp4',
+                      opacity: 0.6,
+                    )
+                  : _videoController != null
+                      ? Opacity(
+                          opacity: 0.6,
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            child: SizedBox(
+                              width: _videoController!.value.size.width,
+                              height: _videoController!.value.size.height,
+                              child: VideoPlayer(_videoController!),
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
             ),
           
           // 그라데이션 오버레이
