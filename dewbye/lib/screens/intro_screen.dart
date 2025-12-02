@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:video_player/video_player.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
@@ -34,11 +35,18 @@ class _IntroScreenState extends State<IntroScreen> {
   void initState() {
     super.initState();
     _userSettings = UserSettings.defaultSettings;
-    _initializeVideo();
+    if (!kIsWeb) {
+      // 모바일에서만 비디오 초기화
+      _initializeVideo();
+    }
     _checkAndRequestPermissions();
   }
 
   Future<void> _initializeVideo() async {
+    if (kIsWeb) {
+      // Web에서는 비디오 사용 안 함
+      return;
+    }
     try {
       _videoController = VideoPlayerController.asset('assets/Intro.mp4');
       await _videoController!.initialize();
@@ -187,21 +195,40 @@ class _IntroScreenState extends State<IntroScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 배경 비디오 (투명도 60%)
-          if (_isVideoInitialized && _videoController != null)
+          // 배경 - Web에서는 그라데이션, 모바일에서는 비디오
+          if (kIsWeb)
+            // Web: 그라데이션 배경
             Positioned.fill(
-              child: Opacity(
-                opacity: 0.6,
-                child: FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: _videoController!.value.size.width,
-                    height: _videoController!.value.size.height,
-                    child: VideoPlayer(_videoController!),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.blue.shade900.withValues(alpha: 0.8),
+                      Colors.cyan.shade700.withValues(alpha: 0.6),
+                      Colors.blue.shade800.withValues(alpha: 0.9),
+                    ],
                   ),
                 ),
               ),
-            ),
+            )
+          else
+            // Mobile: 비디오 배경 (투명도 60%)
+            if (_isVideoInitialized && _videoController != null)
+              Positioned.fill(
+                child: Opacity(
+                  opacity: 0.6,
+                  child: FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: _videoController!.value.size.width,
+                      height: _videoController!.value.size.height,
+                      child: VideoPlayer(_videoController!),
+                    ),
+                  ),
+                ),
+              ),
           
           // 그라데이션 오버레이
           Positioned.fill(
