@@ -195,12 +195,12 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
+    final messenger = ScaffoldMessenger.of(context);
+
     if (!_locationPermissionGranted && !kIsWeb) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('위치 권한이 필요합니다')),
-        );
-      }
+      messenger.showSnackBar(
+        const SnackBar(content: Text('위치 권한이 필요합니다')),
+      );
       return;
     }
 
@@ -223,7 +223,7 @@ class _IntroScreenState extends State<IntroScreen> {
       );
 
       String locationName = '현재 위치 (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
-      
+
       // Geocoding 시도 (실패해도 계속 진행)
       try {
         final placemarks = await placemarkFromCoordinates(
@@ -236,7 +236,7 @@ class _IntroScreenState extends State<IntroScreen> {
           final locality = place.locality ?? '';
           final subLocality = place.subLocality ?? '';
           final administrativeArea = place.administrativeArea ?? '';
-          
+
           if (locality.isNotEmpty || subLocality.isNotEmpty) {
             locationName = '$locality $subLocality'.trim();
           } else if (administrativeArea.isNotEmpty) {
@@ -257,23 +257,25 @@ class _IntroScreenState extends State<IntroScreen> {
           );
           _locationDisplay = locationName;
         });
-        
+
         // 위치 설정 즉시 저장
         await _saveSettings();
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('위치 설정 완료: $locationName'),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+
+        if (mounted) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('위치 설정 완료: $locationName'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } catch (e) {
       debugPrint('위치 가져오기 오류: $e');
       if (mounted) {
         final errorMessage = e.toString();
         String userMessage;
-        
+
         if (errorMessage.contains('denied') || errorMessage.contains('거부')) {
           userMessage = '위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용하거나, 아래에서 위치를 수동으로 선택해주세요.';
         } else if (errorMessage.contains('timeout') || errorMessage.contains('시간 초과')) {
@@ -283,8 +285,8 @@ class _IntroScreenState extends State<IntroScreen> {
         } else {
           userMessage = '위치를 가져올 수 없습니다. 위치를 수동으로 선택해주세요.';
         }
-        
-        ScaffoldMessenger.of(context).showSnackBar(
+
+        messenger.showSnackBar(
           SnackBar(
             content: Text(userMessage),
             duration: const Duration(seconds: 5),
@@ -308,32 +310,35 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 
   Future<void> _selectLocation() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
     // 위치 선택 화면으로 이동
-    final result = await Navigator.of(context).pushNamed('/location');
+    final result = await navigator.pushNamed('/location');
     if (result != null && result is Map<String, dynamic>) {
       final latitude = result['latitude'] as double?;
       final longitude = result['longitude'] as double?;
       final name = result['name'] as String?;
-      
+
       if (latitude != null && longitude != null && mounted) {
         final locationName = name ?? '선택된 위치';
-        
+
         // 위치 설정 업데이트
+        setState(() {
+          _userSettings = _userSettings.copyWith(
+            latitude: latitude,
+            longitude: longitude,
+            locationName: locationName,
+          );
+          _locationDisplay = locationName;
+        });
+
+        // 위치 설정 즉시 저장
+        await _saveSettings();
+
+        // UI 갱신 확인을 위한 피드백
         if (mounted) {
-          setState(() {
-            _userSettings = _userSettings.copyWith(
-              latitude: latitude,
-              longitude: longitude,
-              locationName: locationName,
-            );
-            _locationDisplay = locationName;
-          });
-          
-          // 위치 설정 즉시 저장
-          await _saveSettings();
-          
-          // UI 갱신 확인을 위한 피드백
-          ScaffoldMessenger.of(context).showSnackBar(
+          messenger.showSnackBar(
             SnackBar(
               content: Text('위치가 설정되었습니다: $locationName'),
               duration: const Duration(seconds: 2),
@@ -347,9 +352,11 @@ class _IntroScreenState extends State<IntroScreen> {
   void _startAnalysis() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
-      
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context);
+
       if (_userSettings.latitude == null || _userSettings.longitude == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(content: Text('위치를 설정해주세요')),
         );
         return;
@@ -359,10 +366,12 @@ class _IntroScreenState extends State<IntroScreen> {
       await _saveSettings();
 
       // HomeScreen으로 이동하며 설정 전달
-      Navigator.of(context).pushReplacementNamed(
-        '/',
-        arguments: _userSettings,
-      );
+      if (mounted) {
+        navigator.pushReplacementNamed(
+          '/',
+          arguments: _userSettings,
+        );
+      }
     }
   }
 

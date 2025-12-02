@@ -275,11 +275,12 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
   }
 
   Future<void> _runAnalysis(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
     final locationProvider = context.read<LocationProvider>();
     final analysisProvider = context.read<AnalysisProvider>();
 
     if (locationProvider.currentLocation == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         const SnackBar(content: Text('위치를 먼저 선택해주세요')),
       );
       return;
@@ -295,7 +296,7 @@ class _AnalysisScreenState extends State<AnalysisScreen> {
     if (!mounted) return;
 
     if (analysisProvider.error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('분석 실패: ${analysisProvider.error}')),
       );
     }

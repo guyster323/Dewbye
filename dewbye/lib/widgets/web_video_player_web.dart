@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 // Web 전용 imports
 import 'dart:ui_web' as ui_web show platformViewRegistry;
-// ignore: avoid_web_libraries_in_flutter
+// ignore: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:html' as html;
 
 class WebVideoPlayer extends StatefulWidget {

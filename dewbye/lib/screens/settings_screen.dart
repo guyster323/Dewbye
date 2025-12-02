@@ -377,18 +377,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _showClearCacheDialog(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('캐시 삭제'),
         content: const Text('모든 캐시 데이터를 삭제하시겠습니까?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(ctx, false),
             child: const Text('취소'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(ctx, true),
             child: const Text('삭제'),
           ),
         ],
@@ -399,8 +400,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await _cacheService.clearAllCache();
       await _loadCacheSize();
       if (!mounted) return;
-      
-      ScaffoldMessenger.of(context).showSnackBar(
+
+      messenger.showSnackBar(
         const SnackBar(content: Text('캐시가 삭제되었습니다')),
       );
     }

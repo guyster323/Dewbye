@@ -8,10 +8,8 @@ import 'package:intl/intl.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../providers/analysis_provider.dart';
 import '../config/constants.dart';
-// Web 전용 imports
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
-import 'dart:convert';
+// Conditional web download import
+import 'web_download.dart' as web_download;
 
 /// 데이터 내보내기 서비스
 class ExportService {
@@ -76,7 +74,7 @@ class ExportService {
 
       if (kIsWeb) {
         // Web: 브라우저 다운로드
-        _downloadFileWeb(content, fileName, 'text/csv');
+        web_download.downloadFileWeb(content, fileName, 'text/csv');
         return null; // Web에서는 File 객체 반환 불가
       } else {
         // Mobile: 파일 저장
@@ -153,7 +151,7 @@ class ExportService {
 
       if (kIsWeb) {
         // Web: 브라우저 다운로드
-        _downloadFileWeb(content, fileName, 'text/csv');
+        web_download.downloadFileWeb(content, fileName, 'text/csv');
         return null;
       } else {
         // Mobile: 파일 저장
@@ -358,7 +356,7 @@ class ExportService {
 
       if (kIsWeb) {
         // Web: 브라우저 다운로드
-        _downloadBinaryFileWeb(bytes, fileName, 'application/pdf');
+        web_download.downloadBinaryFileWeb(bytes, fileName, 'application/pdf');
         return null;
       } else {
         // Mobile: 파일 저장
@@ -461,30 +459,5 @@ class ExportService {
       files.map((f) => XFile(f.path)).toList(),
       subject: 'Dewbye 분석 데이터',
     );
-  }
-
-  /// Web에서 파일 다운로드
-  static void _downloadFileWeb(String content, String fileName, String mimeType) {
-    if (!kIsWeb) return;
-    
-    final bytes = utf8.encode(content);
-    final blob = html.Blob([bytes], mimeType);
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    html.AnchorElement(href: url)
-      ..setAttribute('download', fileName)
-      ..click();
-    html.Url.revokeObjectUrl(url);
-  }
-
-  /// Web에서 바이너리 파일 다운로드 (PDF용)
-  static void _downloadBinaryFileWeb(List<int> bytes, String fileName, String mimeType) {
-    if (!kIsWeb) return;
-    
-    final blob = html.Blob([bytes], mimeType);
-    final url = html.Url.createObjectUrlFromBlob(blob);
-    html.AnchorElement(href: url)
-      ..setAttribute('download', fileName)
-      ..click();
-    html.Url.revokeObjectUrl(url);
   }
 }
