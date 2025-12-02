@@ -659,6 +659,7 @@ class _IntroScreenState extends State<IntroScreen> {
                   );
                 },
                 child: Container(
+                  key: ValueKey('location_${_userSettings.latitude}_${_userSettings.longitude}'),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.1),
@@ -678,7 +679,8 @@ class _IntroScreenState extends State<IntroScreen> {
                         child: Text(
                           _isLoadingLocation 
                               ? '위치 확인 중...' 
-                              : (_userSettings.locationName ?? _locationDisplay),
+                              : (_userSettings.locationName ?? _locationDisplay ?? '위치를 선택하세요'),
+                          key: ValueKey('location_text_${_userSettings.locationName}'),
                           style: const TextStyle(
                             fontSize: 16,
                             color: Colors.white,
