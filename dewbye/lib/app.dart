@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'config/theme.dart';
 import 'providers/theme_provider.dart';
+import 'screens/intro_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/location_select_screen.dart';
 import 'screens/analysis_screen.dart';
@@ -21,8 +22,9 @@ class DewbyeApp extends StatelessWidget {
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: themeProvider.themeMode,
-      initialRoute: '/',
+      initialRoute: '/intro',
       routes: {
+        '/intro': (context) => const IntroScreen(),
         '/': (context) => const HomeScreen(),
         '/location': (context) => const LocationSelectScreen(),
         '/analysis': (context) => const AnalysisScreen(),

@@ -1,0 +1,50 @@
+# Cursor Rules for Dewbye Project
+
+## PowerShell 명령 실행 규칙
+
+### 환경 변수 설정
+- PowerShell에서 환경변수 설정 시 출력이 없어 timeout이 발생할 수 있음
+- 해결: 명령 끝에 항상 확인 출력 추가
+
+```powershell
+# 나쁜 예 (멈춤 발생)
+$env:JAVA_HOME = "D:\LGES_Backup\Android Studio\jbr"
+
+# 좋은 예 (완료 확인)
+$env:JAVA_HOME = "D:\LGES_Backup\Android Studio\jbr"; Write-Output "JAVA_HOME set to: $env:JAVA_HOME"
+```
+
+### 여러 명령 실행
+- 여러 명령을 세미콜론(;)으로 연결하여 한 번에 실행
+- 각 단계마다 확인 메시지 출력
+
+```powershell
+$env:JAVA_HOME = "D:\LGES_Backup\Android Studio\jbr"; $env:Path += ";$env:JAVA_HOME\bin"; Write-Output "Environment configured"
+```
+
+## Flutter/Gradle 빌드 환경
+
+### 필수 환경 변수
+```powershell
+JAVA_HOME=D:\LGES_Backup\Android Studio\jbr
+FLUTTER_ROOT=D:\LGES_Backup\AI_Driven\flutter
+GRADLE_HOME=D:\LGES_Backup\AI_Driven\gradle-8.13
+```
+
+### 권장 설정 순서
+1. JAVA_HOME 설정
+2. PATH에 Java bin 추가
+3. PATH에 Flutter bin 추가
+4. PATH에 Gradle bin 추가
+5. 각 단계마다 확인
+
+## 네트워크 문제 대응
+- 회사 네트워크에서 SSL 인증서 오류 발생
+- 로컬 Gradle 사용: `D:\LGES_Backup\AI_Driven\gradle-8.13`
+- gradle-wrapper.properties에서 file:/// 프로토콜 사용
+
+## 한글 응답
+- 모든 응답은 한글로 작성
+- 코드 주석도 가능한 한글 사용
+
+

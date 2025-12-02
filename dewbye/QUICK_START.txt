@@ -1,0 +1,39 @@
+================================
+  Dewbye 앱 빌드 빠른 시작
+================================
+
+[중요] 새 PowerShell 터미널을 열고 실행하세요!
+
+1. 프로젝트 폴더로 이동:
+   cd D:\LGES_Backup\AI_Driven\Dewbye\Dewbye\dewbye
+
+2. Android 기기를 USB로 연결하세요.
+
+3. 다음 명령 실행:
+   .\build_and_deploy.bat
+
+   또는 수동으로:
+   
+   flutter pub get
+   flutter pub run flutter_launcher_icons
+   flutter build apk --release
+   flutter install
+
+================================
+
+Android 기기 설정:
+- 설정 > 휴대전화 정보 > 빌드 번호 7번 터치
+- 설정 > 개발자 옵션 > USB 디버깅 켜기
+- USB 케이블로 컴퓨터에 연결
+- "USB 디버깅 허용" 팝업에서 허용 선택
+
+================================
+
+문제가 있다면:
+1. PowerShell 재시작 (관리자 권한)
+2. flutter doctor 실행
+3. 빌드_가이드.md 파일 참고
+
+================================
+
+

@@ -1,0 +1,86 @@
+============================================
+  외부 네트워크에서 빌드하는 방법
+============================================
+
+[준비 사항]
+- 개인 핫스팟 또는 가정용 Wi-Fi에 연결
+- Android 기기 USB 연결 (선택사항)
+
+============================================
+
+[방법 1: PowerShell 명령 (권장)]
+
+1. 새 PowerShell 창 열기
+
+2. 다음 명령 실행:
+
+cd D:\LGES_Backup\AI_Driven\Dewbye\Dewbye\dewbye
+
+$env:JAVA_HOME = "D:\LGES_Backup\Android Studio\jbr"
+$env:Path += ";$env:JAVA_HOME\bin"
+$env:Path += ";D:\LGES_Backup\AI_Driven\flutter\bin"
+
+Remove-Item -Path "$env:USERPROFILE\.gradle\wrapper\dists" -Recurse -Force -ErrorAction SilentlyContinue
+
+flutter clean
+
+flutter build apk --release
+
+3. 빌드 완료 후 APK 위치:
+   dewbye\build\app\outputs\flutter-apk\app-release.apk
+
+============================================
+
+[방법 2: Android 기기에 직접 설치]
+
+cd D:\LGES_Backup\AI_Driven\Dewbye\Dewbye\dewbye
+
+$env:JAVA_HOME = "D:\LGES_Backup\Android Studio\jbr"
+$env:Path += ";$env:JAVA_HOME\bin"
+$env:Path += ";D:\LGES_Backup\AI_Driven\flutter\bin"
+
+Remove-Item -Path "$env:USERPROFILE\.gradle\wrapper\dists" -Recurse -Force -ErrorAction SilentlyContinue
+
+flutter devices
+(연결된 기기 확인)
+
+flutter run --release
+
+============================================
+
+[방법 3: Android Studio 사용]
+
+1. Android Studio 실행
+
+2. Open: D:\LGES_Backup\AI_Driven\Dewbye\Dewbye\dewbye
+
+3. Gradle sync 완료 대기
+
+4. Build → Flutter → Build APK
+
+5. 완료 메시지에서 "locate" 클릭
+
+============================================
+
+[성공 확인]
+
+APK 파일이 생성되었다면:
+- 파일 크기: 약 20~50MB
+- 위치: dewbye\build\app\outputs\flutter-apk\app-release.apk
+
+Android 기기에 복사하여 설치 가능!
+
+============================================
+
+[테스트 항목]
+
+앱 설치 후 확인:
+1. Intro Screen 표시되는지
+2. 비디오 배경 재생되는지
+3. 권한 요청 나타나는지
+4. 위치 자동 감지되는지
+5. 설정 입력 UI 작동하는지
+6. "분석 시작" 버튼으로 화면 전환되는지
+
+============================================
+
