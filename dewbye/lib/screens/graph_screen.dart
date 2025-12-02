@@ -57,74 +57,76 @@ class _GraphScreenState extends State<GraphScreen>
           ],
         ),
       ),
-      body: analysisProvider.results.isEmpty
-          ? _buildEmptyState(theme)
-          : Column(
-              children: [
-                // 현재 위험도 게이지
-                if (_tabController.index != 3)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        RiskGauge(
-                          riskScore: analysisProvider.currentRiskScore,
-                          size: 120,
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '현재 상태',
-                                style: theme.textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              RiskBar(
-                                riskScore: analysisProvider.currentRiskScore,
-                                height: 10,
-                                showLabel: false,
-                              ),
-                              const SizedBox(height: 8),
-                              if (analysisProvider.results.isNotEmpty)
-                                Text(
-                                  analysisProvider.results.first.recommendation,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurfaceVariant,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                            ],
+      body: SafeArea(
+        child: analysisProvider.results.isEmpty
+            ? _buildEmptyState(theme)
+            : Column(
+                children: [
+                  // 현재 위험도 게이지
+                  if (_tabController.index != 3)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      child: Row(
+                        children: [
+                          RiskGauge(
+                            riskScore: analysisProvider.currentRiskScore,
+                            size: 120,
                           ),
-                        ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '현재 상태',
+                                  style: theme.textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                RiskBar(
+                                  riskScore: analysisProvider.currentRiskScore,
+                                  height: 10,
+                                  showLabel: false,
+                                ),
+                                const SizedBox(height: 8),
+                                if (analysisProvider.results.isNotEmpty)
+                                  Text(
+                                    analysisProvider.results.first.recommendation,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  // 탭 콘텐츠
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildRiskChart(theme, analysisProvider),
+                        _buildTempHumidityChart(theme, analysisProvider),
+                        _buildDewPointChart(theme, analysisProvider),
+                        _buildTimeline(theme, analysisProvider),
                       ],
                     ),
                   ),
-                // 탭 콘텐츠
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [
-                      _buildRiskChart(theme, analysisProvider),
-                      _buildTempHumidityChart(theme, analysisProvider),
-                      _buildDewPointChart(theme, analysisProvider),
-                      _buildTimeline(theme, analysisProvider),
-                    ],
-                  ),
-                ),
-                // 선택된 데이터 정보
-                if (_selectedDataIndex != null &&
-                    _selectedDataIndex! < analysisProvider.results.length)
-                  _buildSelectedDataInfo(
-                    theme,
-                    analysisProvider.results[_selectedDataIndex!],
-                  ),
-              ],
-            ),
+                  // 선택된 데이터 정보
+                  if (_selectedDataIndex != null &&
+                      _selectedDataIndex! < analysisProvider.results.length)
+                    _buildSelectedDataInfo(
+                      theme,
+                      analysisProvider.results[_selectedDataIndex!],
+                    ),
+                ],
+              ),
+      ),
     );
   }
 

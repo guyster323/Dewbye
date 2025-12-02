@@ -170,6 +170,9 @@ class ExportService {
     required List<AnalysisResult> results,
     required String locationName,
     required BuildingType buildingType,
+    String? locationNameEnglish,
+    double? latitude,
+    double? longitude,
     String? customFileName,
   }) async {
     if (results.isEmpty) return null;
@@ -192,6 +195,29 @@ class ExportService {
       final startDate = sortedResults.first.date;
       final endDate = sortedResults.last.date;
 
+      // 90% 이상 위험일 찾기 (일별 최대 위험도 기준)
+      final dailyMaxRisk = <DateTime, double>{};
+      for (final r in sortedResults) {
+        final dayKey = DateTime(r.date.year, r.date.month, r.date.day);
+        if (!dailyMaxRisk.containsKey(dayKey) || dailyMaxRisk[dayKey]! < r.riskScore) {
+          dailyMaxRisk[dayKey] = r.riskScore;
+        }
+      }
+      final highRiskDays = dailyMaxRisk.entries
+          .where((e) => e.value >= 90)
+          .map((e) => e.key)
+          .toList()
+        ..sort();
+
+      // 마지막 날 데이터
+      final lastDay = DateTime(endDate.year, endDate.month, endDate.day);
+
+      // 영문 주소 (좌표 포함)
+      String locationDisplay = locationNameEnglish ?? locationName;
+      if (latitude != null && longitude != null) {
+        locationDisplay += ' (${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)})';
+      }
+
       pdf.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
@@ -209,76 +235,10 @@ class ExportService {
               ),
             ),
             pw.SizedBox(height: 10),
-            
-            // Risk calculation method with detailed explanation
-            _buildPdfSection('Risk Calculation Method', [
-              pw.Text(
-                'CONDENSATION RISK CALCULATION FORMULA',
-                style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold),
-              ),
-              pw.SizedBox(height: 10),
-              pw.Text('Risk Score = Base Risk + Dew Point Risk + Humidity Risk + Building Factor'),
-              pw.SizedBox(height: 10),
-              pw.Text('DETAILED BREAKDOWN:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-              pw.SizedBox(height: 5),
-              pw.Bullet(text: '1. Base Risk (0-40 points):'),
-              pw.Padding(
-                padding: const pw.EdgeInsets.only(left: 20),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('   - Temperature-Dew Point Gap < 3C: High Risk (40 pts)'),
-                    pw.Text('   - Gap 3-5C: Medium Risk (25 pts)'),
-                    pw.Text('   - Gap > 5C: Low Risk (10 pts)'),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 5),
-              pw.Bullet(text: '2. Dew Point Risk (0-30 points):'),
-              pw.Padding(
-                padding: const pw.EdgeInsets.only(left: 20),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('   - Dew Point > 20C: High (30 pts)'),
-                    pw.Text('   - Dew Point 15-20C: Medium (20 pts)'),
-                    pw.Text('   - Dew Point 10-15C: Low (10 pts)'),
-                    pw.Text('   - Dew Point < 10C: Very Low (5 pts)'),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 5),
-              pw.Bullet(text: '3. Humidity Risk (0-20 points):'),
-              pw.Padding(
-                padding: const pw.EdgeInsets.only(left: 20),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('   - Indoor/Outdoor Humidity Diff > 20%: High (20 pts)'),
-                    pw.Text('   - Diff 10-20%: Medium (10 pts)'),
-                    pw.Text('   - Diff < 10%: Low (5 pts)'),
-                  ],
-                ),
-              ),
-              pw.SizedBox(height: 5),
-              pw.Bullet(text: '4. Building Airtightness Factor:'),
-              pw.Padding(
-                padding: const pw.EdgeInsets.only(left: 20),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('   - Current Building Type: ${_getBuildingTypeName(buildingType)}'),
-                    pw.Text('   - Airtightness Multiplier: ${buildingType.airtightness}'),
-                    pw.Text('   - Final Risk = Base Score * (1 + Airtightness)'),
-                  ],
-                ),
-              ),
-            ]),
-            pw.SizedBox(height: 20),
 
             // Basic Information
             _buildPdfSection('Basic Information', [
-              _buildPdfInfoRow('Location', locationName),
+              _buildPdfInfoRow('Location', locationDisplay),
               _buildPdfInfoRow('Building Type', _getBuildingTypeName(buildingType)),
               _buildPdfInfoRow('Analysis Period',
                 '${DateFormat('yyyy-MM-dd').format(startDate)} ~ ${DateFormat('yyyy-MM-dd').format(endDate)}'),
@@ -292,7 +252,8 @@ class ExportService {
               _buildPdfInfoRow('Average Risk Score', '${avgRisk.toStringAsFixed(1)}%'),
               _buildPdfInfoRow('Maximum Risk Score', '${maxRisk.toStringAsFixed(1)}%'),
               _buildPdfInfoRow('Minimum Risk Score', '${minRisk.toStringAsFixed(1)}%'),
-              _buildPdfInfoRow('High Risk Periods', '$highRiskCount times'),
+              _buildPdfInfoRow('High Risk Periods (>=50%)', '$highRiskCount times'),
+              _buildPdfInfoRow('Critical Risk Days (>=90%)', '${highRiskDays.length} days'),
             ]),
             pw.SizedBox(height: 20),
 
@@ -309,24 +270,61 @@ class ExportService {
             ]),
             pw.SizedBox(height: 20),
 
-            // Top Risk Periods
-            pw.Header(level: 1, text: 'Top High-Risk Periods'),
-            pw.SizedBox(height: 10),
-            _buildPdfTable(
-              headers: ['Date/Time', 'Risk', 'Temp', 'Humidity', 'Dew Point'],
-              rows: results
-                  .where((r) => r.riskScore >= 50)
-                  .take(10)
-                  .map((r) => [
-                    _dateFormat.format(r.date),
-                    '${r.riskScore.toStringAsFixed(1)}%',
-                    '${r.outdoorTemp.toStringAsFixed(1)}C',
-                    '${r.outdoorHumidity.toStringAsFixed(0)}%',
-                    '${r.dewPoint.toStringAsFixed(1)}C',
-                  ])
-                  .toList(),
-            ),
+            // Risk calculation method
+            _buildPdfSection('Risk Calculation Method', [
+              pw.Text('Risk Score = Base Risk + Dew Point Risk + Humidity Risk + Building Factor'),
+              pw.SizedBox(height: 5),
+              pw.Text('- Base Risk: Temperature-Dew Point Gap Analysis (0-40 pts)'),
+              pw.Text('- Dew Point Risk: Based on dew point temperature (0-30 pts)'),
+              pw.Text('- Humidity Risk: Indoor/Outdoor humidity difference (0-20 pts)'),
+              pw.Text('- Building Factor: ${_getBuildingTypeName(buildingType)} (x${buildingType.airtightness})'),
+            ]),
             pw.SizedBox(height: 20),
+
+            // Top High-Risk Days (90% 이상)
+            pw.Header(level: 1, text: 'Top High-Risk Days (Risk >= 90%)'),
+            pw.SizedBox(height: 10),
+            if (highRiskDays.isEmpty)
+              pw.Text('No days with risk >= 90% during the analysis period.',
+                  style: const pw.TextStyle(color: PdfColors.grey700))
+            else
+              _buildPdfTable(
+                headers: ['Date', 'Max Risk', 'Avg Temp', 'Avg Humidity', 'Avg Dew Point'],
+                rows: highRiskDays.take(10).map((day) {
+                  final dayResults = sortedResults.where((r) =>
+                      r.date.year == day.year &&
+                      r.date.month == day.month &&
+                      r.date.day == day.day).toList();
+                  final maxR = dayResults.map((r) => r.riskScore).reduce((a, b) => a > b ? a : b);
+                  final avgTemp = dayResults.map((r) => r.outdoorTemp).reduce((a, b) => a + b) / dayResults.length;
+                  final avgHum = dayResults.map((r) => r.outdoorHumidity).reduce((a, b) => a + b) / dayResults.length;
+                  final avgDew = dayResults.map((r) => r.dewPoint).reduce((a, b) => a + b) / dayResults.length;
+                  return [
+                    DateFormat('yyyy-MM-dd').format(day),
+                    '${maxR.toStringAsFixed(1)}%',
+                    '${avgTemp.toStringAsFixed(1)}C',
+                    '${avgHum.toStringAsFixed(0)}%',
+                    '${avgDew.toStringAsFixed(1)}C',
+                  ];
+                }).toList(),
+              ),
+            pw.SizedBox(height: 20),
+
+            // 고위험 일자별 24시간 차트
+            ...highRiskDays.take(5).expand((day) => [
+              pw.Header(level: 2, text: 'Daily Analysis: ${DateFormat('yyyy-MM-dd').format(day)}'),
+              pw.SizedBox(height: 10),
+              _buildDailyCharts(sortedResults, day),
+              pw.SizedBox(height: 20),
+            ]),
+
+            // 마지막 날 24시간 차트 (고위험일이 아닌 경우에만)
+            if (!highRiskDays.contains(lastDay)) ...[
+              pw.Header(level: 2, text: 'Last Day Analysis: ${DateFormat('yyyy-MM-dd').format(lastDay)}'),
+              pw.SizedBox(height: 10),
+              _buildDailyCharts(sortedResults, lastDay),
+              pw.SizedBox(height: 20),
+            ],
 
             // Recommendations
             _buildPdfSection('Recommendations', [
@@ -339,6 +337,8 @@ class ExportService {
               pw.Bullet(text: 'Inspect windows and thermal insulation weak points'),
               if (buildingType.airtightness < 0.5)
                 pw.Bullet(text: 'Consider improving building airtightness'),
+              if (highRiskDays.isNotEmpty)
+                pw.Bullet(text: 'Pay special attention to ${highRiskDays.length} critical risk day(s)'),
             ]),
           ],
           footer: (context) => pw.Container(
@@ -368,6 +368,98 @@ class ExportService {
     } catch (e) {
       return null;
     }
+  }
+
+  /// 일별 24시간 차트 생성
+  static pw.Widget _buildDailyCharts(List<AnalysisResult> allResults, DateTime day) {
+    final dayResults = allResults.where((r) =>
+        r.date.year == day.year &&
+        r.date.month == day.month &&
+        r.date.day == day.day).toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+
+    if (dayResults.isEmpty) {
+      return pw.Text('No data available for this day.');
+    }
+
+    // 시간별 데이터 테이블
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        // 위험도 차트 (텍스트 기반)
+        pw.Text('Risk Score (24h):', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 5),
+        _buildHourlyBarChart(dayResults, (r) => r.riskScore, '%', maxValue: 100),
+        pw.SizedBox(height: 15),
+
+        // 온습도 + 이슬점 테이블
+        pw.Text('Temperature & Humidity (24h):', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 5),
+        _buildPdfTable(
+          headers: ['Hour', 'Outdoor Temp', 'Humidity', 'Dew Point', 'Indoor Temp', 'Risk'],
+          rows: dayResults.map((r) => [
+            '${r.date.hour.toString().padLeft(2, '0')}:00',
+            '${r.outdoorTemp.toStringAsFixed(1)}C',
+            '${r.outdoorHumidity.toStringAsFixed(0)}%',
+            '${r.dewPoint.toStringAsFixed(1)}C',
+            '${r.indoorTemp.toStringAsFixed(1)}C',
+            '${r.riskScore.toStringAsFixed(0)}%',
+          ]).toList(),
+        ),
+      ],
+    );
+  }
+
+  /// 시간별 막대 차트 (텍스트 기반)
+  static pw.Widget _buildHourlyBarChart(
+    List<AnalysisResult> results,
+    double Function(AnalysisResult) getValue,
+    String unit, {
+    double maxValue = 100,
+  }) {
+    const barWidth = 15.0;
+    const maxBarHeight = 60.0;
+
+    return pw.Container(
+      height: maxBarHeight + 30,
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.end,
+        mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+        children: results.map((r) {
+          final value = getValue(r);
+          final barHeight = (value / maxValue) * maxBarHeight;
+          final color = value >= 90
+              ? PdfColors.red
+              : value >= 75
+                  ? PdfColors.orange
+                  : value >= 50
+                      ? PdfColors.yellow800
+                      : value >= 25
+                          ? PdfColors.green
+                          : PdfColors.blue;
+
+          return pw.Column(
+            mainAxisAlignment: pw.MainAxisAlignment.end,
+            children: [
+              pw.Text(
+                value.toStringAsFixed(0),
+                style: pw.TextStyle(fontSize: 6, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.Container(
+                width: barWidth,
+                height: barHeight.clamp(2, maxBarHeight),
+                color: color,
+              ),
+              pw.SizedBox(height: 2),
+              pw.Text(
+                '${r.date.hour}',
+                style: const pw.TextStyle(fontSize: 6),
+              ),
+            ],
+          );
+        }).toList(),
+      ),
+    );
   }
 
   static String _getBuildingTypeName(BuildingType type) {

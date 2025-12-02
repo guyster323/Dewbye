@@ -436,12 +436,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     try {
       // Use English display name for PDF reports
-      final locationName = locationProvider.currentLocation?.englishDisplayName ?? 
-          'Unknown Location (${locationProvider.currentLocation?.latitude.toStringAsFixed(4) ?? "N/A"}, ${locationProvider.currentLocation?.longitude.toStringAsFixed(4) ?? "N/A"})';
+      final location = locationProvider.currentLocation;
+      final locationName = location?.displayName ?? 'Unknown Location';
+      final locationNameEnglish = location?.englishDisplayName;
+      final latitude = location?.latitude;
+      final longitude = location?.longitude;
+
       final file = await ExportService.exportToPdf(
         results: analysisProvider.results,
         locationName: locationName,
         buildingType: analysisProvider.buildingType,
+        locationNameEnglish: locationNameEnglish,
+        latitude: latitude,
+        longitude: longitude,
       );
       if (file != null) {
         await ExportService.shareFile(file);

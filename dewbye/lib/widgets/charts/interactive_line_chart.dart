@@ -166,13 +166,18 @@ class _InteractiveLineChartState extends State<InteractiveLineChart> {
                     fitInsideVertically: true,
                     getTooltipItems: (touchedSpots) {
                       return touchedSpots.map((spot) {
-                        final point = widget.dataPoints[spot.x.toInt()];
-                      final yLabel = widget.yLabelFormatter?.call(point.value) ??
-                          point.value.toStringAsFixed(1);
-                      final xLabel = widget.xLabelFormatter?.call(point.time) ??
-                          '${point.time.hour}:00';
+                        final index = spot.x.toInt();
+                        if (index < 0 || index >= widget.dataPoints.length) {
+                          return null;
+                        }
+                        final point = widget.dataPoints[index];
+                        final yLabel = widget.yLabelFormatter?.call(point.value) ??
+                            point.value.toStringAsFixed(1);
+                        // 날짜 + 시간 형식으로 표시
+                        final dateStr = '${point.time.year}/${point.time.month}/${point.time.day}';
+                        final timeStr = '${point.time.hour.toString().padLeft(2, '0')}:${point.time.minute.toString().padLeft(2, '0')}';
                         return LineTooltipItem(
-                          '$xLabel\n$yLabel',
+                          '$dateStr $timeStr\n$yLabel',
                           TextStyle(
                             color: theme.colorScheme.onSurface,
                             fontWeight: FontWeight.bold,
@@ -496,23 +501,43 @@ class _MultiLineChartState extends State<MultiLineChart> {
                     fitInsideHorizontally: true,
                     fitInsideVertically: true,
                     getTooltipItems: (touchedSpots) {
-                      return touchedSpots.map((spot) {
+                      final items = <LineTooltipItem?>[];
+                      // 첫 번째 포인트에서 날짜/시간 정보 추가
+                      bool dateAdded = false;
+                      for (final spot in touchedSpots) {
                         final seriesIndex = spot.barIndex;
                         if (_hiddenSeries.contains(seriesIndex)) {
-                          return null;
+                          items.add(null);
+                          continue;
                         }
                         final series = widget.series[seriesIndex];
                         final pointIndex = spot.x.toInt();
-                        if (pointIndex >= series.dataPoints.length) return null;
+                        if (pointIndex < 0 || pointIndex >= series.dataPoints.length) {
+                          items.add(null);
+                          continue;
+                        }
                         final point = series.dataPoints[pointIndex];
-                        return LineTooltipItem(
-                          '${series.name}: ${point.value.toStringAsFixed(1)}',
+
+                        String text;
+                        if (!dateAdded) {
+                          // 첫 번째 항목에 날짜/시간 추가
+                          final dateStr = '${point.time.year}/${point.time.month}/${point.time.day}';
+                          final timeStr = '${point.time.hour.toString().padLeft(2, '0')}:${point.time.minute.toString().padLeft(2, '0')}';
+                          text = '$dateStr $timeStr\n${series.name}: ${point.value.toStringAsFixed(1)}';
+                          dateAdded = true;
+                        } else {
+                          text = '${series.name}: ${point.value.toStringAsFixed(1)}';
+                        }
+
+                        items.add(LineTooltipItem(
+                          text,
                           TextStyle(
                             color: series.color ?? theme.colorScheme.primary,
                             fontWeight: FontWeight.bold,
                           ),
-                        );
-                      }).toList();
+                        ));
+                      }
+                      return items;
                     },
                   ),
                 ),
