@@ -377,6 +377,13 @@ class AnalysisProvider extends ChangeNotifier {
       final minRisk = dayResults.map((r) => r.riskScore).reduce((a, b) => a < b ? a : b);
       final avgRisk = dayResults.map((r) => r.riskScore).reduce((a, b) => a + b) / dayResults.length;
       final highRiskHours = dayResults.where((r) => r.riskScore >= 50).length;
+      
+      // RAW 데이터 평균 계산
+      final avgOutdoorTemp = dayResults.map((r) => r.outdoorTemp).reduce((a, b) => a + b) / dayResults.length;
+      final avgOutdoorHumidity = dayResults.map((r) => r.outdoorHumidity).reduce((a, b) => a + b) / dayResults.length;
+      final avgDewPoint = dayResults.map((r) => r.dewPoint).reduce((a, b) => a + b) / dayResults.length;
+      final avgIndoorTemp = dayResults.map((r) => r.indoorTemp).reduce((a, b) => a + b) / dayResults.length;
+      final avgIndoorHumidity = dayResults.map((r) => r.indoorHumidity).reduce((a, b) => a + b) / dayResults.length;
 
       summary[entry.key] = DailySummary(
         date: entry.key,
@@ -385,6 +392,11 @@ class AnalysisProvider extends ChangeNotifier {
         avgRiskScore: avgRisk,
         highRiskHours: highRiskHours,
         maxRiskLevel: RiskLevel.fromScore(maxRisk),
+        avgOutdoorTemp: avgOutdoorTemp,
+        avgOutdoorHumidity: avgOutdoorHumidity,
+        avgDewPoint: avgDewPoint,
+        avgIndoorTemp: avgIndoorTemp,
+        avgIndoorHumidity: avgIndoorHumidity,
       );
     }
 
@@ -479,6 +491,12 @@ class DailySummary {
   final double avgRiskScore;
   final int highRiskHours;
   final RiskLevel maxRiskLevel;
+  // RAW 데이터 필드 추가
+  final double avgOutdoorTemp;
+  final double avgOutdoorHumidity;
+  final double avgDewPoint;
+  final double avgIndoorTemp;
+  final double avgIndoorHumidity;
 
   DailySummary({
     required this.date,
@@ -487,5 +505,10 @@ class DailySummary {
     required this.avgRiskScore,
     required this.highRiskHours,
     required this.maxRiskLevel,
+    required this.avgOutdoorTemp,
+    required this.avgOutdoorHumidity,
+    required this.avgDewPoint,
+    required this.avgIndoorTemp,
+    required this.avgIndoorHumidity,
   });
 }

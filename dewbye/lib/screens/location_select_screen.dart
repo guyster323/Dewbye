@@ -48,6 +48,11 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                     : null,
               ),
               onChanged: (query) {
+                // 입력 즉시 검색 (트림 처리는 provider에서)
+                locationProvider.searchLocation(query);
+              },
+              onSubmitted: (query) {
+                // Enter 키 입력 시에도 검색
                 locationProvider.searchLocation(query);
               },
             ),
@@ -84,8 +89,16 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                     ? null
                     : () async {
                         await locationProvider.getCurrentLocation();
-                        if (mounted && locationProvider.currentLocation != null) {
-                          Navigator.pop(context);
+                        if (!mounted) return;
+                        
+                        if (locationProvider.currentLocation != null) {
+                          final loc = locationProvider.currentLocation!;
+                          // 현재 위치 정보를 반환
+                          Navigator.pop(context, {
+                            'latitude': loc.latitude,
+                            'longitude': loc.longitude,
+                            'name': loc.displayName,
+                          });
                         }
                       },
               ),
@@ -164,7 +177,12 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
             ),
             onTap: () {
               locationProvider.selectLocation(result);
-              Navigator.pop(context);
+              // 선택한 위치 정보를 반환
+              Navigator.pop(context, {
+                'latitude': result.latitude,
+                'longitude': result.longitude,
+                'name': result.displayName,
+              });
             },
           ),
         );
@@ -258,7 +276,12 @@ class _LocationSelectScreenState extends State<LocationSelectScreen> {
                   ),
                   onTap: () {
                     locationProvider.selectLocation(saved.location);
-                    Navigator.pop(context);
+                    // 선택한 위치 정보를 반환
+                    Navigator.pop(context, {
+                      'latitude': saved.location.latitude,
+                      'longitude': saved.location.longitude,
+                      'name': saved.displayName,
+                    });
                   },
                 ),
               );

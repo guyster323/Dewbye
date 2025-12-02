@@ -22,7 +22,11 @@
       "Bash(powershell.exe -Command \"cd C:\\Users\\windo\\Dewbye; git add -A && git status\")",
       "Bash(powershell.exe -Command \"cd C:\\Users\\windo\\Dewbye; git commit -m ''feat: Phase 4 완료 - 분석 엔진 강화\n\n- HVAC 분석 유틸리티 구현 (hvac_analytics.dart)\n  - 이슬점, 절대습도, 습구온도, 열지수 계산\n  - HVAC 모드 전환 감지\n  - 취약 시간대 자동 감지\n  - 기밀도별 습도 응답 예측\n  - 결로 발생 시점 예측\n- 리포트 생성기 구현 (report_generator.dart)\n  - 일별 요약 리포트 (DailyReport)\n  - 주별 요약 리포트 (WeeklyReport)\n  - 트렌드 분석 및 권장사항 자동 생성\n- AnalysisProvider에 고급 분석 기능 통합\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>''\")",
       "Bash(powershell.exe -Command \"cd C:\\Users\\windo\\Dewbye; git commit -m ''feat: Phase 5 완료 - 시각화 개선\n\n- 인터랙티브 라인 차트 위젯 (interactive_line_chart.dart)\n  - 터치 인터랙션 및 포인트 선택\n  - 멀티 라인 차트 지원 (범례 토글)\n  - 임계선 표시 (위험도 레벨)\n  - 툴팁 및 선택 정보 표시\n\n- 위험도 게이지 애니메이션 (risk_gauge.dart)\n  - 원형 게이지 (Sweep 애니메이션)\n  - 미니 게이지 (리스트용)\n  - 수평 위험도 바 (구간별 색상)\n\n- 이벤트 타임라인 (event_timeline.dart)\n  - 시간순 이벤트 표시\n  - 유형별 아이콘/색상 (warning, danger, hvac, condensation)\n  - HVAC 모드 전환 및 결로 예측 이벤트\n  - 날짜별 그룹화 지원\n\n- 상세 분석 테이블 (analysis_table.dart)\n  - 페이지네이션 데이터 테이블\n  - 다중 컬럼 정렬 기능\n  - 요약 카드 (평균/최대/최소)\n  - 일별 요약 테이블\n\n- GraphScreen 전면 개선\n  - 탭 기반 네비게이션 (4개 탭)\n  - 현재 위험도 게이지 상단 표시\n  - 선택 데이터 하단 상세 정보\n\n- HomeScreen 업데이트\n  - 게이지 + 결로 애니메이션 조합\n  - 위험도 바 추가\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>''\")",
-      "Bash(powershell.exe -Command:*)"
+      "Bash(powershell.exe -Command:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)",
+      "Bash(git merge:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": []

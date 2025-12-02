@@ -25,6 +25,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _loadCacheSize();
     _loadNotificationSettings();
+    // 저장된 위치 다시 로드
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final locationProvider = context.read<LocationProvider>();
+      // Provider 초기화 및 저장된 위치 로드
+      locationProvider.init();
+    });
   }
 
   Future<void> _loadCacheSize() async {
@@ -392,11 +398,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirmed == true) {
       await _cacheService.clearAllCache();
       await _loadCacheSize();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('캐시가 삭제되었습니다')),
-        );
-      }
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('캐시가 삭제되었습니다')),
+      );
     }
   }
 

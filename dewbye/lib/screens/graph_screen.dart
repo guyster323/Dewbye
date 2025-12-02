@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 import '../config/theme.dart';
 import '../providers/analysis_provider.dart';
 import '../widgets/charts/charts.dart';
@@ -15,6 +16,8 @@ class _GraphScreenState extends State<GraphScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   int? _selectedDataIndex;
+  DateTime? _startDate;
+  DateTime? _endDate;
 
   @override
   void initState() {
@@ -36,6 +39,13 @@ class _GraphScreenState extends State<GraphScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('분석 그래프'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.date_range),
+            onPressed: () => _showDateRangeDialog(context, analysisProvider),
+            tooltip: '기간 선택',
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
@@ -149,8 +159,78 @@ class _GraphScreenState extends State<GraphScreen>
     );
   }
 
+  Future<void> _showDateRangeDialog(BuildContext context, AnalysisProvider provider) async {
+    if (provider.results.isEmpty) return;
+
+    final sortedResults = List<AnalysisResult>.from(provider.results)
+      ..sort((a, b) => a.date.compareTo(b.date));
+    
+    final minDate = sortedResults.first.date;
+    final maxDate = sortedResults.last.date;
+
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: minDate,
+      lastDate: maxDate,
+      initialDateRange: _startDate != null && _endDate != null
+          ? DateTimeRange(start: _startDate!, end: _endDate!)
+          : null,
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && mounted) {
+      setState(() {
+        _startDate = picked.start;
+        _endDate = picked.end;
+      });
+    }
+  }
+
+  List<AnalysisResult> _filterResultsByDateRange(List<AnalysisResult> results) {
+    if (_startDate == null || _endDate == null) return results;
+
+    return results.where((r) {
+      return r.date.isAfter(_startDate!.subtract(const Duration(days: 1))) &&
+             r.date.isBefore(_endDate!.add(const Duration(days: 1)));
+    }).toList();
+  }
+
+  /// X축 라벨 포맷터 - 데이터 범위에 따라 자동 조정
+  String Function(DateTime) _getXLabelFormatter(List<ChartDataPoint> dataPoints) {
+    if (dataPoints.isEmpty) {
+      return (date) => DateFormat('MM/dd').format(date);
+    }
+
+    final firstDate = dataPoints.first.time;
+    final lastDate = dataPoints.last.time;
+    final daysDiff = lastDate.difference(firstDate).inDays;
+
+    if (daysDiff > 180) {
+      // 6개월 이상: 년-월 표시
+      return (date) => DateFormat('yy/MM').format(date);
+    } else if (daysDiff > 90) {
+      // 3개월 이상: 월/일 표시
+      return (date) => DateFormat('MM/dd').format(date);
+    } else if (daysDiff > 30) {
+      // 1개월 이상: 월/일 표시
+      return (date) => DateFormat('MM/dd').format(date);
+    } else if (daysDiff > 7) {
+      // 1주일 이상: 월/일 시:분
+      return (date) => DateFormat('MM/dd\nHH:mm').format(date);
+    } else {
+      // 1주일 이하: 일 시:분
+      return (date) => DateFormat('dd\nHH:mm').format(date);
+    }
+  }
+
   Widget _buildRiskChart(ThemeData theme, AnalysisProvider provider) {
-    final results = provider.results.reversed.toList();
+    final allResults = provider.results.reversed.toList();
+    final results = _filterResultsByDateRange(allResults);
     final dataPoints = results.map((r) {
       return ChartDataPoint(
         time: r.date,
@@ -166,29 +246,30 @@ class _GraphScreenState extends State<GraphScreen>
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: InteractiveLineChart(
-            title: '결로 위험도 추이',
+            title: 'Condensation Risk Trend',
             dataPoints: dataPoints,
             minY: 0,
             maxY: 100,
             lineColor: theme.colorScheme.primary,
             yLabelFormatter: (value) => '${value.toStringAsFixed(0)}%',
+            xLabelFormatter: _getXLabelFormatter(dataPoints),
             thresholdLines: [
               ThresholdLine(
                 value: 75,
                 color: AppTheme.riskCritical,
-                label: '위험',
+                label: 'Danger',
                 isDashed: true,
               ),
               ThresholdLine(
                 value: 50,
                 color: AppTheme.riskHigh,
-                label: '경고',
+                label: 'Warning',
                 isDashed: true,
               ),
               ThresholdLine(
                 value: 25,
                 color: AppTheme.riskMedium,
-                label: '주의',
+                label: 'Caution',
                 isDashed: true,
               ),
             ],
@@ -204,7 +285,8 @@ class _GraphScreenState extends State<GraphScreen>
   }
 
   Widget _buildTempHumidityChart(ThemeData theme, AnalysisProvider provider) {
-    final results = provider.results.reversed.toList();
+    final allResults = provider.results.reversed.toList();
+    final results = _filterResultsByDateRange(allResults);
 
     final tempPoints = results.map((r) {
       return ChartDataPoint(
@@ -233,20 +315,21 @@ class _GraphScreenState extends State<GraphScreen>
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: MultiLineChart(
-            title: '온도 및 습도 추이',
+            title: 'Temperature & Humidity Trend',
+            xLabelFormatter: _getXLabelFormatter(tempPoints),
             series: [
               ChartSeries(
-                name: '외기 온도 (°C)',
+                name: 'Outdoor Temp (C)',
                 dataPoints: tempPoints,
                 color: Colors.orange,
               ),
               ChartSeries(
-                name: '외기 습도 (%)',
+                name: 'Outdoor Humidity (%)',
                 dataPoints: humidityPoints,
                 color: Colors.blue,
               ),
               ChartSeries(
-                name: '실내 온도 (°C)',
+                name: 'Indoor Temp (C)',
                 dataPoints: indoorTempPoints,
                 color: Colors.green,
                 isDashed: true,
@@ -259,7 +342,8 @@ class _GraphScreenState extends State<GraphScreen>
   }
 
   Widget _buildDewPointChart(ThemeData theme, AnalysisProvider provider) {
-    final results = provider.results.reversed.toList();
+    final allResults = provider.results.reversed.toList();
+    final results = _filterResultsByDateRange(allResults);
 
     final dewPointPoints = results.map((r) {
       return ChartDataPoint(
@@ -288,21 +372,22 @@ class _GraphScreenState extends State<GraphScreen>
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: MultiLineChart(
-            title: '이슬점 분석',
+            title: 'Dew Point Analysis',
+            xLabelFormatter: _getXLabelFormatter(dewPointPoints),
             series: [
               ChartSeries(
-                name: '이슬점 (°C)',
+                name: 'Dew Point (C)',
                 dataPoints: dewPointPoints,
                 color: AppTheme.riskHigh,
               ),
               ChartSeries(
-                name: '실내 온도 (°C)',
+                name: 'Indoor Temp (C)',
                 dataPoints: indoorTempPoints,
                 color: AppTheme.riskLow,
                 isDashed: true,
               ),
               ChartSeries(
-                name: '외기 온도 (°C)',
+                name: 'Outdoor Temp (C)',
                 dataPoints: outdoorTempPoints,
                 color: Colors.orange,
               ),
@@ -316,7 +401,8 @@ class _GraphScreenState extends State<GraphScreen>
   Widget _buildTimeline(ThemeData theme, AnalysisProvider provider) {
     // 주요 이벤트만 필터링 (위험도 50% 이상 또는 급격한 변화)
     final events = <TimelineEvent>[];
-    final results = provider.results;
+    final allResults = provider.results;
+    final results = _filterResultsByDateRange(allResults);
 
     for (int i = 0; i < results.length; i++) {
       final result = results[i];

@@ -6,6 +6,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import '../models/user_settings.dart';
 import '../widgets/glassmorphism_container.dart';
+import '../widgets/web_video_player.dart';
+import '../services/cache_service.dart';
 
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key});
@@ -30,53 +32,73 @@ class _IntroScreenState extends State<IntroScreen> {
   // 위치 정보
   bool _isLoadingLocation = false;
   String _locationDisplay = '현재 위치';
+  
+  // 캐시 서비스
+  final CacheService _cacheService = CacheService();
 
   @override
   void initState() {
     super.initState();
-    _userSettings = UserSettings.defaultSettings;
     _initializeVideo();
-    _checkAndRequestPermissions();
+    _initializeSettings();
+  }
+
+  /// 설정 초기화 (저장된 설정 로드 후 권한 확인)
+  Future<void> _initializeSettings() async {
+    await _loadSavedSettings();
+    await _checkAndRequestPermissions();
+  }
+
+  /// 저장된 설정 불러오기
+  Future<void> _loadSavedSettings() async {
+    try {
+      await _cacheService.openBoxes();
+      final savedSettings = _cacheService.getUserSettings();
+      if (savedSettings != null) {
+        setState(() {
+          _userSettings = savedSettings;
+          if (savedSettings.locationName != null) {
+            _locationDisplay = savedSettings.locationName!;
+          }
+        });
+      } else {
+        _userSettings = UserSettings.defaultSettings;
+      }
+    } catch (e) {
+      debugPrint('설정 로드 오류: $e');
+      _userSettings = UserSettings.defaultSettings;
+    }
+  }
+
+  /// 설정 저장
+  Future<void> _saveSettings() async {
+    try {
+      await _cacheService.openBoxes();
+      await _cacheService.saveUserSettings(_userSettings);
+    } catch (e) {
+      debugPrint('설정 저장 오류: $e');
+    }
   }
 
   Future<void> _initializeVideo() async {
-    try {
-      if (kIsWeb) {
-        // 웹에서는 현재 페이지 URL을 기반으로 동영상 경로 구성
-        final currentUrl = Uri.base.toString();
-        String videoUrl;
-        
-        if (currentUrl.contains('github.io')) {
-          // GitHub Pages 환경
-          videoUrl = 'https://guyster323.github.io/Dewbye/assets/assets/Intro.mp4';
-        } else if (currentUrl.contains('localhost') || currentUrl.contains('127.0.0.1')) {
-          // 로컬 개발 환경
-          videoUrl = '/assets/assets/Intro.mp4';
-        } else {
-          // 기타 환경
-          final baseUrl = Uri.base.origin;
-          final basePath = Uri.base.path.replaceAll(RegExp(r'/[^/]*$'), '');
-          videoUrl = '$baseUrl$basePath/assets/assets/Intro.mp4';
-        }
-        
-        debugPrint('Video URL: $videoUrl');
-        _videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
-      } else {
-        _videoController = VideoPlayerController.asset('assets/Intro.mp4');
-      }
-      await _videoController!.initialize();
-      _videoController!.setLooping(true);
-      _videoController!.setVolume(0); // 웹에서 자동재생을 위해 음소거
-      _videoController!.play();
+    if (kIsWeb) {
+      // Web: WebVideoPlayer 위젯 사용 (별도 위젯에서 처리)
       setState(() {
         _isVideoInitialized = true;
       });
-    } catch (e) {
-      debugPrint('비디오 초기화 오류: $e');
-      // 비디오 초기화 실패해도 앱은 계속 작동
-      setState(() {
-        _isVideoInitialized = false;
-      });
+    } else {
+      // Mobile: video_player 사용
+      try {
+        _videoController = VideoPlayerController.asset('assets/Intro.mp4');
+        await _videoController!.initialize();
+        _videoController!.setLooping(true);
+        _videoController!.play();
+        setState(() {
+          _isVideoInitialized = true;
+        });
+      } catch (e) {
+        debugPrint('모바일 비디오 초기화 오류: $e');
+      }
     }
   }
 
@@ -87,270 +109,242 @@ class _IntroScreenState extends State<IntroScreen> {
 
     try {
       if (kIsWeb) {
-        // 웹에서는 permission_handler가 작동하지 않음
-        // 브라우저의 Geolocation API를 직접 사용
-        _locationPermissionGranted = true; // 웹에서는 Geolocator가 브라우저 권한을 요청함
-        _storagePermissionGranted = true; // 웹에서는 저장소 권한 불필요
+        // Web에서는 브라우저가 직접 권한을 관리함
+        // Web Storage (localStorage, IndexedDB)는 권한 불필요
+        _storagePermissionGranted = true;
         
-        // 위치 가져오기 시도
+        // Web에서 위치 권한 상태 확인
         try {
-          await _getCurrentLocation();
+          final permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) {
+            // 권한이 없으면 요청
+            final requested = await Geolocator.requestPermission();
+            _locationPermissionGranted = requested == LocationPermission.whileInUse || 
+                                        requested == LocationPermission.always;
+          } else {
+            _locationPermissionGranted = permission == LocationPermission.whileInUse || 
+                                        permission == LocationPermission.always;
+          }
         } catch (e) {
-          debugPrint('웹 위치 가져오기 오류: $e');
+          debugPrint('Web 위치 권한 확인 오류: $e');
+          // 권한 확인 실패 시 일단 허용으로 설정 (실제 사용시 브라우저가 요청)
+          _locationPermissionGranted = true;
+        }
+        
+        // 위치 권한이 있고 저장된 위치가 없을 때만 자동으로 현재 위치 가져오기
+        if (_locationPermissionGranted && 
+            (_userSettings.latitude == null || _userSettings.longitude == null)) {
+          try {
+            await _getCurrentLocation();
+          } catch (e) {
+            debugPrint('Web 위치 가져오기 실패: $e');
+            // 위치 실패해도 앱은 계속 사용 가능 (수동으로 설정 가능)
+          }
         }
       } else {
-        // 모바일 앱에서는 permission_handler 사용
-        // 위치 권한 확인 및 요청
-        var locationStatus = await Permission.location.status;
-        if (!locationStatus.isGranted) {
-          locationStatus = await Permission.location.request();
+        // 모바일: 위치 권한 확인 및 요청
+        try {
+          var locationStatus = await Permission.location.status;
+          if (!locationStatus.isGranted) {
+            locationStatus = await Permission.location.request();
+          }
+          _locationPermissionGranted = locationStatus.isGranted;
+        } catch (e) {
+          debugPrint('위치 권한 확인 오류: $e');
+          _locationPermissionGranted = false;
         }
-        _locationPermissionGranted = locationStatus.isGranted;
 
         // 저장소 권한 확인 및 요청 (Android 12 이하)
-        if (await Permission.storage.isRestricted == false) {
-          var storageStatus = await Permission.storage.status;
-          if (!storageStatus.isGranted) {
-            storageStatus = await Permission.storage.request();
+        try {
+          final isRestricted = await Permission.storage.isRestricted;
+          if (!isRestricted) {
+            var storageStatus = await Permission.storage.status;
+            if (!storageStatus.isGranted) {
+              storageStatus = await Permission.storage.request();
+            }
+            _storagePermissionGranted = storageStatus.isGranted;
+          } else {
+            _storagePermissionGranted = true; // Android 13+에서는 필요 없음
           }
-          _storagePermissionGranted = storageStatus.isGranted;
-        } else {
-          _storagePermissionGranted = true; // Android 13+에서는 필요 없음
+        } catch (e) {
+          debugPrint('저장소 권한 확인 오류: $e');
+          // 저장소 권한 확인 실패시 기본 허용 (앱 내부 저장소는 권한 불필요)
+          _storagePermissionGranted = true;
         }
 
-        // 위치 권한이 있으면 자동으로 현재 위치 가져오기
-        if (_locationPermissionGranted) {
+        // 위치 권한이 있고 저장된 위치가 없을 때만 자동으로 현재 위치 가져오기
+        if (_locationPermissionGranted && 
+            (_userSettings.latitude == null || _userSettings.longitude == null)) {
           await _getCurrentLocation();
         }
       }
     } catch (e) {
       debugPrint('권한 확인 오류: $e');
-      // 오류가 발생해도 앱은 계속 작동
-      _locationPermissionGranted = true;
-      _storagePermissionGranted = true;
+      if (kIsWeb) {
+        // Web에서는 권한 오류가 있어도 계속 진행
+        _locationPermissionGranted = true;
+        _storagePermissionGranted = true;
+      }
     } finally {
-      setState(() {
-        _checkingPermissions = false;
-      });
+      if (mounted) {
+        setState(() {
+          _checkingPermissions = false;
+        });
+      }
     }
   }
 
   Future<void> _getCurrentLocation() async {
+    if (!_locationPermissionGranted && !kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('위치 권한이 필요합니다')),
+        );
+      }
+      return;
+    }
+
     setState(() {
       _isLoadingLocation = true;
     });
 
     try {
-      // 웹에서는 위치 서비스 활성화 확인
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        // 서비스가 비활성화되어 있으면 기본 위치 사용 (서울)
-        _setDefaultLocation();
-        return;
-      }
-
-      // 위치 권한 확인
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          _setDefaultLocation();
-          return;
+      // 웹에서 위치 서비스 활성화 확인
+      if (kIsWeb) {
+        final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        if (!serviceEnabled) {
+          throw Exception('위치 서비스가 비활성화되어 있습니다. 브라우저 설정에서 위치 서비스를 활성화해주세요.');
         }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        _setDefaultLocation();
-        return;
       }
 
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () {
-          throw Exception('위치 가져오기 시간 초과');
-        },
+        timeLimit: const Duration(seconds: 10), // 웹에서 타임아웃 설정
       );
 
-      String locationName = 'Current Location';
+      String locationName = '현재 위치 (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
       
-      // geocoding은 웹에서 불안정할 수 있으므로 try-catch로 감싸기
-      if (!kIsWeb) {
-        try {
-          final placemarks = await placemarkFromCoordinates(
-            position.latitude,
-            position.longitude,
-          );
+      // Geocoding 시도 (실패해도 계속 진행)
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
 
-          if (placemarks.isNotEmpty) {
-            final place = placemarks.first;
-            locationName = '${place.locality ?? ''} ${place.subLocality ?? ''}'.trim();
-            if (locationName.isEmpty) {
-              locationName = 'Current Location';
-            }
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          final locality = place.locality ?? '';
+          final subLocality = place.subLocality ?? '';
+          final administrativeArea = place.administrativeArea ?? '';
+          
+          if (locality.isNotEmpty || subLocality.isNotEmpty) {
+            locationName = '$locality $subLocality'.trim();
+          } else if (administrativeArea.isNotEmpty) {
+            locationName = administrativeArea;
           }
-        } catch (e) {
-          debugPrint('Geocoding 오류: $e');
         }
+      } catch (geocodingError) {
+        debugPrint('Geocoding 오류 (계속 진행): $geocodingError');
+        // Geocoding 실패해도 좌표는 사용
       }
 
-      setState(() {
-        _userSettings = _userSettings.copyWith(
-          latitude: position.latitude,
-          longitude: position.longitude,
-          locationName: locationName,
+      if (mounted) {
+        setState(() {
+          _userSettings = _userSettings.copyWith(
+            latitude: position.latitude,
+            longitude: position.longitude,
+            locationName: locationName,
+          );
+          _locationDisplay = locationName;
+        });
+        
+        // 위치 설정 즉시 저장
+        await _saveSettings();
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('위치 설정 완료: $locationName'),
+            duration: const Duration(seconds: 2),
+          ),
         );
-        _locationDisplay = '$locationName (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
-        _locationPermissionGranted = true;
-      });
+      }
     } catch (e) {
       debugPrint('위치 가져오기 오류: $e');
-      _setDefaultLocation();
+      if (mounted) {
+        final errorMessage = e.toString();
+        String userMessage;
+        
+        if (errorMessage.contains('denied') || errorMessage.contains('거부')) {
+          userMessage = '위치 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 허용하거나, 아래에서 위치를 수동으로 선택해주세요.';
+        } else if (errorMessage.contains('timeout') || errorMessage.contains('시간 초과')) {
+          userMessage = '위치를 가져오는 데 시간이 오래 걸립니다. 위치를 수동으로 선택해주세요.';
+        } else if (errorMessage.contains('unavailable') || errorMessage.contains('사용 불가')) {
+          userMessage = '위치 서비스를 사용할 수 없습니다. 위치를 수동으로 선택해주세요.';
+        } else {
+          userMessage = '위치를 가져올 수 없습니다. 위치를 수동으로 선택해주세요.';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(userMessage),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: '위치 선택',
+              textColor: Colors.white,
+              onPressed: () {
+                _selectLocation();
+              },
+            ),
+          ),
+        );
+      }
     } finally {
-      setState(() {
-        _isLoadingLocation = false;
-      });
-    }
-  }
-  
-  /// 기본 위치 설정 (서울)
-  void _setDefaultLocation() {
-    setState(() {
-      _userSettings = _userSettings.copyWith(
-        latitude: 37.5665,
-        longitude: 126.9780,
-        locationName: 'Seoul, South Korea',
-      );
-      _locationDisplay = 'Seoul (기본 위치)';
-      _locationPermissionGranted = true;
-      _storagePermissionGranted = true;
-      _isLoadingLocation = false;
-    });
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('위치를 가져올 수 없어 서울로 설정되었습니다. 위치 검색으로 변경할 수 있습니다.'),
-          duration: Duration(seconds: 3),
-        ),
-      );
+      if (mounted) {
+        setState(() {
+          _isLoadingLocation = false;
+        });
+      }
     }
   }
 
   Future<void> _selectLocation() async {
     // 위치 선택 화면으로 이동
-    try {
-      final result = await Navigator.of(context).pushNamed('/location');
-      if (result != null && result is Map<String, dynamic>) {
-        setState(() {
-          _userSettings = _userSettings.copyWith(
-            latitude: result['latitude'] as double?,
-            longitude: result['longitude'] as double?,
-            locationName: result['name'] as String?,
+    final result = await Navigator.of(context).pushNamed('/location');
+    if (result != null && result is Map<String, dynamic>) {
+      final latitude = result['latitude'] as double?;
+      final longitude = result['longitude'] as double?;
+      final name = result['name'] as String?;
+      
+      if (latitude != null && longitude != null && mounted) {
+        final locationName = name ?? '선택된 위치';
+        
+        // 위치 설정 업데이트
+        if (mounted) {
+          setState(() {
+            _userSettings = _userSettings.copyWith(
+              latitude: latitude,
+              longitude: longitude,
+              locationName: locationName,
+            );
+            _locationDisplay = locationName;
+          });
+          
+          // 위치 설정 즉시 저장
+          await _saveSettings();
+          
+          // UI 갱신 확인을 위한 피드백
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('위치가 설정되었습니다: $locationName'),
+              duration: const Duration(seconds: 2),
+            ),
           );
-          _locationDisplay = result['name'] as String? ?? '선택된 위치';
-          _locationPermissionGranted = true;
-          _storagePermissionGranted = true;
-        });
+        }
       }
-    } catch (e) {
-      debugPrint('위치 선택 오류: $e');
-      // 위치 선택 화면이 없는 경우 수동 입력 대화상자 표시
-      _showManualLocationDialog();
     }
   }
-  
-  /// 수동 위치 입력 대화상자
-  void _showManualLocationDialog() {
-    final latController = TextEditingController(text: '37.5665');
-    final lngController = TextEditingController(text: '126.9780');
-    final nameController = TextEditingController(text: 'Seoul');
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.grey[900],
-        title: const Text('위치 입력', style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: '위치 이름',
-                labelStyle: TextStyle(color: Colors.white70),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white30),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: latController,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: '위도 (Latitude)',
-                labelStyle: TextStyle(color: Colors.white70),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white30),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: lngController,
-              keyboardType: TextInputType.number,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: '경도 (Longitude)',
-                labelStyle: TextStyle(color: Colors.white70),
-                enabledBorder: UnderlineInputBorder(
-                  borderSide: BorderSide(color: Colors.white30),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('취소'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final lat = double.tryParse(latController.text);
-              final lng = double.tryParse(lngController.text);
-              final name = nameController.text.trim();
-              
-              if (lat != null && lng != null && name.isNotEmpty) {
-                setState(() {
-                  _userSettings = _userSettings.copyWith(
-                    latitude: lat,
-                    longitude: lng,
-                    locationName: name,
-                  );
-                  _locationDisplay = '$name ($lat, $lng)';
-                  _locationPermissionGranted = true;
-                  _storagePermissionGranted = true;
-                });
-                Navigator.pop(context);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('올바른 위치 정보를 입력해주세요')),
-                );
-              }
-            },
-            child: const Text('확인'),
-          ),
-        ],
-      ),
-    );
-  }
 
-  void _startAnalysis() {
+  void _startAnalysis() async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
       
@@ -360,6 +354,9 @@ class _IntroScreenState extends State<IntroScreen> {
         );
         return;
       }
+
+      // 설정 저장 후 화면 이동
+      await _saveSettings();
 
       // HomeScreen으로 이동하며 설정 전달
       Navigator.of(context).pushReplacementNamed(
@@ -380,20 +377,27 @@ class _IntroScreenState extends State<IntroScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 배경 비디오 (투명도 60%)
-          if (_isVideoInitialized && _videoController != null)
+          // 배경 비디오 (투명도 60%, 무한 반복)
+          if (_isVideoInitialized)
             Positioned.fill(
-              child: Opacity(
-                opacity: 0.6,
-                child: FittedBox(
-                  fit: BoxFit.cover,
-                  child: SizedBox(
-                    width: _videoController!.value.size.width,
-                    height: _videoController!.value.size.height,
-                    child: VideoPlayer(_videoController!),
-                  ),
-                ),
-              ),
+              child: kIsWeb
+                  ? const WebVideoPlayer(
+                      assetPath: 'assets/Intro.mp4',
+                      opacity: 0.6,
+                    )
+                  : _videoController != null
+                      ? Opacity(
+                          opacity: 0.6,
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            child: SizedBox(
+                              width: _videoController!.value.size.width,
+                              height: _videoController!.value.size.height,
+                              child: VideoPlayer(_videoController!),
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
             ),
           
           // 그라데이션 오버레이
@@ -655,6 +659,7 @@ class _IntroScreenState extends State<IntroScreen> {
                   );
                 },
                 child: Container(
+                  key: ValueKey('location_${_userSettings.latitude}_${_userSettings.longitude}'),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.1),
@@ -672,7 +677,12 @@ class _IntroScreenState extends State<IntroScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          _isLoadingLocation ? '위치 확인 중...' : _locationDisplay,
+                          _isLoadingLocation 
+                              ? '위치 확인 중...' 
+                              : (_userSettings.locationName != null 
+                                  ? _userSettings.locationName! 
+                                  : (_locationDisplay.isNotEmpty ? _locationDisplay : '위치를 선택하세요')),
+                          key: ValueKey('location_text_${_userSettings.locationName}_${_userSettings.latitude}_${_userSettings.longitude}'),
                           style: const TextStyle(
                             fontSize: 16,
                             color: Colors.white,
@@ -733,6 +743,8 @@ class _IntroScreenState extends State<IntroScreen> {
                         buildingType: value,
                       );
                     });
+                    // 건물 타입 변경 시 저장
+                    _saveSettings();
                   }
                 },
               ),
@@ -765,6 +777,8 @@ class _IntroScreenState extends State<IntroScreen> {
                             indoorTemperature: value,
                           );
                         });
+                        // 온도 변경 시 저장
+                        _saveSettings();
                       },
                     ),
                   ),
@@ -815,6 +829,8 @@ class _IntroScreenState extends State<IntroScreen> {
                             indoorHumidity: value,
                           );
                         });
+                        // 습도 변경 시 저장
+                        _saveSettings();
                       },
                     ),
                   ),
@@ -844,13 +860,19 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 
   Widget _buildStartButton() {
-    final allPermissionsGranted = _locationPermissionGranted && _storagePermissionGranted;
+    // 웹에서는 저장소 권한이 항상 허용됨
+    final allPermissionsGranted = kIsWeb 
+        ? true 
+        : (_locationPermissionGranted && _storagePermissionGranted);
     final hasLocation = _userSettings.latitude != null && _userSettings.longitude != null;
 
+    // 웹에서는 위치 권한이 없어도 수동으로 위치를 설정할 수 있으면 시작 가능
+    final canStart = kIsWeb
+        ? (hasLocation && !_checkingPermissions)
+        : (allPermissionsGranted && hasLocation && !_checkingPermissions);
+
     return ElevatedButton(
-      onPressed: (allPermissionsGranted && hasLocation && !_checkingPermissions)
-          ? _startAnalysis
-          : null,
+      onPressed: canStart ? _startAnalysis : null,
       style: ElevatedButton.styleFrom(
         backgroundColor: Colors.blue,
         disabledBackgroundColor: Colors.grey,
@@ -863,11 +885,11 @@ class _IntroScreenState extends State<IntroScreen> {
       child: Text(
         _checkingPermissions
             ? '권한 확인 중...'
-            : !allPermissionsGranted
-                ? '권한을 허용해주세요'
-                : !hasLocation
-                    ? '위치를 설정해주세요'
-                    : '분석 시작',
+            : !hasLocation
+                ? '위치를 설정해주세요'
+                : (kIsWeb || allPermissionsGranted)
+                    ? '분석 시작'
+                    : '권한을 허용해주세요',
         style: const TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.bold,
