@@ -35,28 +35,23 @@ class _IntroScreenState extends State<IntroScreen> {
   void initState() {
     super.initState();
     _userSettings = UserSettings.defaultSettings;
-    if (!kIsWeb) {
-      // 모바일에서만 비디오 초기화
-      _initializeVideo();
-    }
+    // 모든 플랫폼에서 비디오 초기화
+    _initializeVideo();
     _checkAndRequestPermissions();
   }
 
   Future<void> _initializeVideo() async {
-    if (kIsWeb) {
-      // Web에서는 비디오 사용 안 함
-      return;
-    }
     try {
       _videoController = VideoPlayerController.asset('assets/Intro.mp4');
       await _videoController!.initialize();
-      _videoController!.setLooping(true);
+      _videoController!.setLooping(true); // 무한 반복 설정
       _videoController!.play();
       setState(() {
         _isVideoInitialized = true;
       });
     } catch (e) {
       debugPrint('비디오 초기화 오류: $e');
+      // Web에서 비디오 로딩 실패해도 계속 진행
     }
   }
 
@@ -116,10 +111,12 @@ class _IntroScreenState extends State<IntroScreen> {
   }
 
   Future<void> _getCurrentLocation() async {
-    if (!_locationPermissionGranted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('위치 권한이 필요합니다')),
-      );
+    if (!_locationPermissionGranted && !kIsWeb) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('위치 권한이 필요합니다')),
+        );
+      }
       return;
     }
 
@@ -132,28 +129,49 @@ class _IntroScreenState extends State<IntroScreen> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      final placemarks = await placemarkFromCoordinates(
-        position.latitude,
-        position.longitude,
-      );
+      String locationName = '현재 위치 (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
+      
+      // Geocoding 시도 (실패해도 계속 진행)
+      try {
+        final placemarks = await placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
 
-      String locationName = '현재 위치';
-      if (placemarks.isNotEmpty) {
-        final place = placemarks.first;
-        locationName = '${place.locality ?? ''} ${place.subLocality ?? ''}'.trim();
-        if (locationName.isEmpty) {
-          locationName = '현재 위치';
+        if (placemarks.isNotEmpty) {
+          final place = placemarks.first;
+          final locality = place.locality ?? '';
+          final subLocality = place.subLocality ?? '';
+          final administrativeArea = place.administrativeArea ?? '';
+          
+          if (locality.isNotEmpty || subLocality.isNotEmpty) {
+            locationName = '${locality} ${subLocality}'.trim();
+          } else if (administrativeArea.isNotEmpty) {
+            locationName = administrativeArea;
+          }
         }
+      } catch (geocodingError) {
+        debugPrint('Geocoding 오류 (계속 진행): $geocodingError');
+        // Geocoding 실패해도 좌표는 사용
       }
 
-      setState(() {
-        _userSettings = _userSettings.copyWith(
-          latitude: position.latitude,
-          longitude: position.longitude,
-          locationName: locationName,
+      if (mounted) {
+        setState(() {
+          _userSettings = _userSettings.copyWith(
+            latitude: position.latitude,
+            longitude: position.longitude,
+            locationName: locationName,
+          );
+          _locationDisplay = locationName;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('위치 설정 완료: $locationName'),
+            duration: const Duration(seconds: 2),
+          ),
         );
-        _locationDisplay = locationName;
-      });
+      }
     } catch (e) {
       debugPrint('위치 가져오기 오류: $e');
       if (mounted) {
@@ -162,9 +180,11 @@ class _IntroScreenState extends State<IntroScreen> {
         );
       }
     } finally {
-      setState(() {
-        _isLoadingLocation = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingLocation = false;
+        });
+      }
     }
   }
 
@@ -213,40 +233,21 @@ class _IntroScreenState extends State<IntroScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          // 배경 - Web에서는 그라데이션, 모바일에서는 비디오
-          if (kIsWeb)
-            // Web: 그라데이션 배경
+          // 배경 비디오 (투명도 60%, 무한 반복)
+          if (_isVideoInitialized && _videoController != null)
             Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      Colors.blue.shade900.withValues(alpha: 0.8),
-                      Colors.cyan.shade700.withValues(alpha: 0.6),
-                      Colors.blue.shade800.withValues(alpha: 0.9),
-                    ],
+              child: Opacity(
+                opacity: 0.6,
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    width: _videoController!.value.size.width,
+                    height: _videoController!.value.size.height,
+                    child: VideoPlayer(_videoController!),
                   ),
                 ),
               ),
-            )
-          else
-            // Mobile: 비디오 배경 (투명도 60%)
-            if (_isVideoInitialized && _videoController != null)
-              Positioned.fill(
-                child: Opacity(
-                  opacity: 0.6,
-                  child: FittedBox(
-                    fit: BoxFit.cover,
-                    child: SizedBox(
-                      width: _videoController!.value.size.width,
-                      height: _videoController!.value.size.height,
-                      child: VideoPlayer(_videoController!),
-                    ),
-                  ),
-                ),
-              ),
+            ),
           
           // 그라데이션 오버레이
           Positioned.fill(
