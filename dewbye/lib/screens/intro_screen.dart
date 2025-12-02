@@ -275,7 +275,7 @@ class _IntroScreenState extends State<IntroScreen> {
     return GlassmorphismContainer(
       blur: 10,
       opacity: 0.2,
-      borderRadius: 16,
+      borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -383,7 +383,7 @@ class _IntroScreenState extends State<IntroScreen> {
     return GlassmorphismContainer(
       blur: 10,
       opacity: 0.2,
-      borderRadius: 16,
+      borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Form(
@@ -506,7 +506,7 @@ class _IntroScreenState extends State<IntroScreen> {
               ),
               const SizedBox(height: 8),
               DropdownButtonFormField<BuildingType>(
-                value: _userSettings.buildingType,
+                initialValue: _userSettings.buildingType,
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: Colors.white.withOpacity(0.1),
@@ -682,5 +682,6 @@ class _IntroScreenState extends State<IntroScreen> {
     );
   }
 }
+
 
 
