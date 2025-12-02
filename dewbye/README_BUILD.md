@@ -132,3 +132,4 @@ adb logcat | findstr flutter
 - Java JDK 설치 여부 (Android 빌드에 필요)
 
 
+
