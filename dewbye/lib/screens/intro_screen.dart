@@ -42,24 +42,41 @@ class _IntroScreenState extends State<IntroScreen> {
   Future<void> _initializeVideo() async {
     try {
       if (kIsWeb) {
-        // 웹에서는 base-href를 고려한 상대 경로 사용
-        // GitHub Pages: /Dewbye/assets/assets/Intro.mp4
-        // 로컬: /assets/assets/Intro.mp4
-        final baseHref = Uri.base.path.contains('Dewbye') ? '/Dewbye' : '';
-        _videoController = VideoPlayerController.networkUrl(
-          Uri.parse('$baseHref/assets/assets/Intro.mp4'),
-        );
+        // 웹에서는 현재 페이지 URL을 기반으로 동영상 경로 구성
+        final currentUrl = Uri.base.toString();
+        String videoUrl;
+        
+        if (currentUrl.contains('github.io')) {
+          // GitHub Pages 환경
+          videoUrl = 'https://guyster323.github.io/Dewbye/assets/assets/Intro.mp4';
+        } else if (currentUrl.contains('localhost') || currentUrl.contains('127.0.0.1')) {
+          // 로컬 개발 환경
+          videoUrl = '/assets/assets/Intro.mp4';
+        } else {
+          // 기타 환경
+          final baseUrl = Uri.base.origin;
+          final basePath = Uri.base.path.replaceAll(RegExp(r'/[^/]*$'), '');
+          videoUrl = '$baseUrl$basePath/assets/assets/Intro.mp4';
+        }
+        
+        debugPrint('Video URL: $videoUrl');
+        _videoController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
       } else {
         _videoController = VideoPlayerController.asset('assets/Intro.mp4');
       }
       await _videoController!.initialize();
       _videoController!.setLooping(true);
+      _videoController!.setVolume(0); // 웹에서 자동재생을 위해 음소거
       _videoController!.play();
       setState(() {
         _isVideoInitialized = true;
       });
     } catch (e) {
       debugPrint('비디오 초기화 오류: $e');
+      // 비디오 초기화 실패해도 앱은 계속 작동
+      setState(() {
+        _isVideoInitialized = false;
+      });
     }
   }
 
@@ -69,30 +86,48 @@ class _IntroScreenState extends State<IntroScreen> {
     });
 
     try {
-      // 위치 권한 확인 및 요청
-      var locationStatus = await Permission.location.status;
-      if (!locationStatus.isGranted) {
-        locationStatus = await Permission.location.request();
-      }
-      _locationPermissionGranted = locationStatus.isGranted;
-
-      // 저장소 권한 확인 및 요청 (Android 12 이하)
-      if (await Permission.storage.isRestricted == false) {
-        var storageStatus = await Permission.storage.status;
-        if (!storageStatus.isGranted) {
-          storageStatus = await Permission.storage.request();
+      if (kIsWeb) {
+        // 웹에서는 permission_handler가 작동하지 않음
+        // 브라우저의 Geolocation API를 직접 사용
+        _locationPermissionGranted = true; // 웹에서는 Geolocator가 브라우저 권한을 요청함
+        _storagePermissionGranted = true; // 웹에서는 저장소 권한 불필요
+        
+        // 위치 가져오기 시도
+        try {
+          await _getCurrentLocation();
+        } catch (e) {
+          debugPrint('웹 위치 가져오기 오류: $e');
         }
-        _storagePermissionGranted = storageStatus.isGranted;
       } else {
-        _storagePermissionGranted = true; // Android 13+에서는 필요 없음
-      }
+        // 모바일 앱에서는 permission_handler 사용
+        // 위치 권한 확인 및 요청
+        var locationStatus = await Permission.location.status;
+        if (!locationStatus.isGranted) {
+          locationStatus = await Permission.location.request();
+        }
+        _locationPermissionGranted = locationStatus.isGranted;
 
-      // 위치 권한이 있으면 자동으로 현재 위치 가져오기
-      if (_locationPermissionGranted) {
-        await _getCurrentLocation();
+        // 저장소 권한 확인 및 요청 (Android 12 이하)
+        if (await Permission.storage.isRestricted == false) {
+          var storageStatus = await Permission.storage.status;
+          if (!storageStatus.isGranted) {
+            storageStatus = await Permission.storage.request();
+          }
+          _storagePermissionGranted = storageStatus.isGranted;
+        } else {
+          _storagePermissionGranted = true; // Android 13+에서는 필요 없음
+        }
+
+        // 위치 권한이 있으면 자동으로 현재 위치 가져오기
+        if (_locationPermissionGranted) {
+          await _getCurrentLocation();
+        }
       }
     } catch (e) {
       debugPrint('권한 확인 오류: $e');
+      // 오류가 발생해도 앱은 계속 작동
+      _locationPermissionGranted = true;
+      _storagePermissionGranted = true;
     } finally {
       setState(() {
         _checkingPermissions = false;
