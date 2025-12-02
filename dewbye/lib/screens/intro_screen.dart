@@ -66,30 +66,48 @@ class _IntroScreenState extends State<IntroScreen> {
     });
 
     try {
-      // 위치 권한 확인 및 요청
-      var locationStatus = await Permission.location.status;
-      if (!locationStatus.isGranted) {
-        locationStatus = await Permission.location.request();
-      }
-      _locationPermissionGranted = locationStatus.isGranted;
-
-      // 저장소 권한 확인 및 요청 (Android 12 이하)
-      if (await Permission.storage.isRestricted == false) {
-        var storageStatus = await Permission.storage.status;
-        if (!storageStatus.isGranted) {
-          storageStatus = await Permission.storage.request();
+      if (kIsWeb) {
+        // Web에서는 브라우저 권한 사용 (자동 승인)
+        _locationPermissionGranted = true;
+        _storagePermissionGranted = true; // Web Storage 자동 사용
+        // Web에서 위치 가져오기 시도 (브라우저가 직접 권한 요청)
+        try {
+          await _getCurrentLocation();
+        } catch (e) {
+          debugPrint('Web 위치 가져오기: $e');
+          // 실패해도 계속 진행
         }
-        _storagePermissionGranted = storageStatus.isGranted;
       } else {
-        _storagePermissionGranted = true; // Android 13+에서는 필요 없음
-      }
+        // 모바일: 위치 권한 확인 및 요청
+        var locationStatus = await Permission.location.status;
+        if (!locationStatus.isGranted) {
+          locationStatus = await Permission.location.request();
+        }
+        _locationPermissionGranted = locationStatus.isGranted;
 
-      // 위치 권한이 있으면 자동으로 현재 위치 가져오기
-      if (_locationPermissionGranted) {
-        await _getCurrentLocation();
+        // 저장소 권한 확인 및 요청 (Android 12 이하)
+        if (await Permission.storage.isRestricted == false) {
+          var storageStatus = await Permission.storage.status;
+          if (!storageStatus.isGranted) {
+            storageStatus = await Permission.storage.request();
+          }
+          _storagePermissionGranted = storageStatus.isGranted;
+        } else {
+          _storagePermissionGranted = true; // Android 13+에서는 필요 없음
+        }
+
+        // 위치 권한이 있으면 자동으로 현재 위치 가져오기
+        if (_locationPermissionGranted) {
+          await _getCurrentLocation();
+        }
       }
     } catch (e) {
       debugPrint('권한 확인 오류: $e');
+      if (kIsWeb) {
+        // Web에서는 권한 오류가 있어도 계속 진행
+        _locationPermissionGranted = true;
+        _storagePermissionGranted = true;
+      }
     } finally {
       setState(() {
         _checkingPermissions = false;
