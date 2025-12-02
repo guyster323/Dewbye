@@ -679,8 +679,10 @@ class _IntroScreenState extends State<IntroScreen> {
                         child: Text(
                           _isLoadingLocation 
                               ? '위치 확인 중...' 
-                              : (_userSettings.locationName ?? _locationDisplay ?? '위치를 선택하세요'),
-                          key: ValueKey('location_text_${_userSettings.locationName}'),
+                              : (_userSettings.locationName != null 
+                                  ? _userSettings.locationName! 
+                                  : (_locationDisplay.isNotEmpty ? _locationDisplay : '위치를 선택하세요')),
+                          key: ValueKey('location_text_${_userSettings.locationName}_${_userSettings.latitude}_${_userSettings.longitude}'),
                           style: const TextStyle(
                             fontSize: 16,
                             color: Colors.white,
