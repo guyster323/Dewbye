@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:video_player/video_player.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:geolocator/geolocator.dart';
@@ -40,7 +41,17 @@ class _IntroScreenState extends State<IntroScreen> {
 
   Future<void> _initializeVideo() async {
     try {
-      _videoController = VideoPlayerController.asset('assets/Intro.mp4');
+      if (kIsWeb) {
+        // 웹에서는 base-href를 고려한 상대 경로 사용
+        // GitHub Pages: /Dewbye/assets/assets/Intro.mp4
+        // 로컬: /assets/assets/Intro.mp4
+        final baseHref = Uri.base.path.contains('Dewbye') ? '/Dewbye' : '';
+        _videoController = VideoPlayerController.networkUrl(
+          Uri.parse('$baseHref/assets/assets/Intro.mp4'),
+        );
+      } else {
+        _videoController = VideoPlayerController.asset('assets/Intro.mp4');
+      }
       await _videoController!.initialize();
       _videoController!.setLooping(true);
       _videoController!.play();
